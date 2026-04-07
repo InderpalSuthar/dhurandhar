@@ -7,10 +7,6 @@ from typing import Optional, List
 from enum import Enum
 
 
-# ============================================================
-# ENUMS - Task-specific classifications
-# ============================================================
-
 class CriticalityLabel(str, Enum):
     """Task 1: Criticality Detection"""
     CRITICAL = "critical"
@@ -35,10 +31,6 @@ class RootCauseCategory(str, Enum):
     DOCUMENTATION = "documentation"
     EXTERNAL = "external"
 
-
-# ============================================================
-# DATA MODELS
-# ============================================================
 
 class BugReport(BaseModel):
     """A GitHub bug report."""
@@ -111,10 +103,6 @@ class BugGroundTruth(BaseModel):
 
     model_config = ConfigDict(frozen=False)
 
-
-# ============================================================
-# EXPORTS
-# ============================================================
 
 __all__ = [
     "CriticalityLabel",

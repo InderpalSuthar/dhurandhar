@@ -36,10 +36,9 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Global rate limiter: max 3 req/s sustained (well within 5000/hr auth limit)
 _rate_lock = threading.Lock()
 _last_request_time = 0.0
-_MIN_INTERVAL = 0.34  # seconds between requests globally
+_MIN_INTERVAL = 0.34
 
 
 def _build_session(token: str) -> requests.Session:
@@ -57,7 +56,6 @@ def _rate_limited_get(session: requests.Session, url: str, params: dict = None,
     """Thread-safe GET with global rate limiting and retry logic."""
     global _last_request_time
     for attempt in range(retries):
-        # Enforce global rate limit
         with _rate_lock:
             now = time.monotonic()
             gap = _MIN_INTERVAL - (now - _last_request_time)
@@ -98,10 +96,6 @@ class GitHubFetcher:
     def _get(self, url: str, params: dict = None) -> Optional[requests.Response]:
         """Convenience wrapper for rate-limited GET on the main-thread session."""
         return _rate_limited_get(self._session, url, params)
-
-    # ------------------------------------------------------------------
-    # Fetchers
-    # ------------------------------------------------------------------
 
     def fetch_issues(self, repo: str, max_issues: int = 50,
                      state: str = "closed", labels: List[str] = None) -> List[Dict]:
@@ -226,11 +220,7 @@ class GitHubFetcher:
     # ------------------------------------------------------------------
 
     def _is_bug_issue(self, issue: Dict) -> bool:
-        """Determine if a raw GitHub issue is a genuine bug report.
-
-        Uses keyword matching against labels, title, and body to filter out
-        feature requests, questions, and low-quality issues.
-        """
+        """Determine if a raw GitHub issue is a genuine bug report."""
         labels = [lbl.get("name", "").lower() for lbl in issue.get("labels", [])]
         title = (issue.get("title") or "").lower()
         body = (issue.get("body") or "").lower()[:500]
@@ -250,18 +240,7 @@ class GitHubFetcher:
         return (bug_label or title_bug or body_bug) and not skip and has_body
 
     def process_raw_to_structured(self, raw_issues: List[Dict], repo: str) -> List[Dict]:
-        """Convert raw GitHub issues into structured bug dicts.
-
-        Filters non-bug issues and extracts relevant fields:
-        bug_id, title, body, labels, created_at, repo, author, _closed_by.
-
-        Args:
-            raw_issues: Raw issue dicts from GitHub API.
-            repo: Repository name in 'owner/name' format.
-
-        Returns:
-            List of structured bug dicts (without ground truth yet).
-        """
+        """Convert raw GitHub issues into structured bug dicts."""
         structured: List[Dict] = []
         for issue in raw_issues:
             if not self._is_bug_issue(issue):
@@ -285,33 +264,17 @@ class GitHubFetcher:
             })
         return structured
 
-    # ------------------------------------------------------------------
-    # Ground-truth labeling
-    # ------------------------------------------------------------------
-
     def label_ground_truth(self, bugs: List[Dict]) -> List[Dict]:
-        """Assign ground-truth labels to each bug using keyword heuristics.
-
-        Labels: criticality, severity, root_cause, assignee, is_ambiguous.
-        Modifies bugs in-place and removes the internal '_closed_by' field.
-
-        Args:
-            bugs: List of structured bug dicts.
-
-        Returns:
-            The same list, now with 'ground_truth' dict on each bug.
-        """
+        """Assign ground-truth labels to each bug using keyword heuristics."""
         for bug in bugs:
             labels_lower = [lbl.lower() for lbl in bug.get("labels", [])]
             title_lower = bug.get("title", "").lower()
             body_lower = bug.get("body", "").lower()[:1000]
             text = f"{title_lower} {' '.join(labels_lower)} {body_lower}"
 
-            # Criticality
             crit_hits = sum(1 for kw in CRITICAL_KEYWORDS if kw in text)
             crit = "critical" if crit_hits > 0 else "non_critical"
 
-            # Severity
             sev = 3
             for level in [5, 4, 3, 2, 1]:
                 if any(kw in text for kw in SEVERITY_LABEL_MAP[level]):
@@ -320,15 +283,12 @@ class GitHubFetcher:
             if crit == "critical" and sev < 4:
                 sev = 4
 
-            # Root cause
             scores = {cat: sum(1 for kw in kws if kw in text)
                       for cat, kws in ROOT_CAUSE_KEYWORDS.items()}
             rc = max(scores, key=scores.get) if max(scores.values()) > 0 else "bug"
 
-            # Assignee
             assignee = bug.get("_closed_by") or bug.get("author", "unknown")
 
-            # Ambiguity detection
             top = sorted(scores.values(), reverse=True)
             is_amb = len(top) >= 2 and top[0] > 0 and top[0] == top[1]
 
@@ -342,26 +302,9 @@ class GitHubFetcher:
             bug.pop("_closed_by", None)
         return bugs
 
-    # ------------------------------------------------------------------
-    # Contributor expertise enrichment
-    # ------------------------------------------------------------------
-
     def _build_contributor_expertise(self, bugs: List[Dict],
                                      contributors_data: Dict) -> Dict:
-        """Cross-reference labeled bugs to build expertise profiles per contributor.
-
-        For each contributor, finds which root_cause categories and labels they
-        have been assigned to fix, then injects 'work_area' and 'expertise_labels'
-        into the contributor entries.
-
-        Args:
-            bugs: Labeled bug dicts (must have ground_truth.assignee).
-            contributors_data: Dict mapping repo -> {contributors, teams}.
-
-        Returns:
-            The enriched contributors_data dict.
-        """
-        # Build a global map: assignee_name -> {categories, labels}
+        """Cross-reference labeled bugs to build expertise profiles per contributor."""
         expertise_map: Dict[str, Dict] = {}
         for bug in bugs:
             assignee = bug.get("ground_truth", {}).get("assignee", "").lower()
@@ -379,13 +322,11 @@ class GitHubFetcher:
                 lbl.lower() for lbl in bug_labels
             )
 
-        # Inject into contributors_data
         for _repo, data in contributors_data.items():
             for contrib in data.get("contributors", []):
                 name = contrib["name"].lower()
                 if name in expertise_map:
                     exp = expertise_map[name]
-                    # Top categories sorted by frequency
                     contrib["work_area"] = sorted(
                         exp["categories"],
                         key=exp["categories"].get,
@@ -395,14 +336,9 @@ class GitHubFetcher:
                 else:
                     contrib["work_area"] = []
                     contrib["expertise_labels"] = []
-                # Remove useless contribution count
                 contrib.pop("contributions", None)
 
         return contributors_data
-
-    # ------------------------------------------------------------------
-    # I/O helpers
-    # ------------------------------------------------------------------
 
     def save_to_json(self, data, filepath: str) -> None:
         """Save data to a JSON file, creating directories as needed."""
@@ -412,21 +348,8 @@ class GitHubFetcher:
         count = len(data) if isinstance(data, list) else "dict"
         logger.info("Saved %s entries to %s", count, filepath)
 
-    # ------------------------------------------------------------------
-    # Pipeline orchestration
-    # ------------------------------------------------------------------
-
     def _fetch_repo(self, repo: str, config: Dict, fetch_comments: bool) -> tuple:
-        """Fetch one repo's issues + contributors. Designed to run in a thread.
-
-        Args:
-            repo: GitHub repo in 'owner/name' format.
-            config: Dict with 'max_issues' key.
-            fetch_comments: Whether to fetch issue comments.
-
-        Returns:
-            Tuple of (repo, raw_issues, structured_bugs, contributor_entry).
-        """
+        """Fetch one repo's issues + contributors. Designed to run in a thread."""
         target = config.get("max_issues", 50)
         raw = self.fetch_issues(repo, max_issues=target * 5, state="closed")
         structured = self.process_raw_to_structured(raw, repo)[:target]
@@ -445,16 +368,7 @@ class GitHubFetcher:
 
     def run_full_pipeline(self, repos: Dict = None, fetch_comments: bool = True,
                           parallel_repos: bool = True) -> List[Dict]:
-        """Run the complete data pipeline: fetch, structure, label, enrich, and save.
-
-        Args:
-            repos: Dict mapping repo name to config. Defaults to REPO_CONFIGS.
-            fetch_comments: Whether to fetch issue comments (slower but richer).
-            parallel_repos: Whether to fetch repos in parallel.
-
-        Returns:
-            List of labeled bug dicts saved to data/bugs_processed.json.
-        """
+        """Run the complete data pipeline: fetch, structure, label, enrich, and save."""
         repos = repos or REPO_CONFIGS
         logger.info("=" * 60)
         logger.info("BUG TRIAGE DATA PIPELINE — %d repositories", len(repos))
@@ -465,7 +379,6 @@ class GitHubFetcher:
         contributors_data: Dict = {}
 
         if parallel_repos and len(repos) > 1:
-            # Cap workers to avoid overwhelming GitHub
             max_workers = min(len(repos), 5)
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 futures = {
@@ -485,14 +398,11 @@ class GitHubFetcher:
                 all_structured.extend(structured)
                 contributors_data[repo] = contrib_entry
 
-        # Save raw data
         self.save_to_json(all_raw, "data/bugs_raw.json")
 
-        # Label ground truth
         labeled = self.label_ground_truth(all_structured)
         self.save_to_json(labeled, "data/bugs_processed.json")
 
-        # Enrich contributors with expertise from labeled bugs
         contributors_data = self._build_contributor_expertise(labeled, contributors_data)
         self.save_to_json(contributors_data, "data/contributors.json")
 

@@ -61,23 +61,17 @@ class BugTriageEnv:
         self._seed = seed
         self._reward_calculator = RewardCalculator()
 
-        # Load dataset (with class-level cache)
         if data_path not in BugTriageEnv._DATA_CACHE:
             with open(data_path, "r", encoding="utf-8") as f:
                 BugTriageEnv._DATA_CACHE[data_path] = json.load(f)
         
         raw_bugs = BugTriageEnv._DATA_CACHE[data_path]
 
-        if repository_filter:
-            self._bugs = [b for b in raw_bugs if b.get("repo") in repository_filter]
-        else:
-            self._bugs = raw_bugs
-
+        self._bugs = [b for b in raw_bugs if b.get("repo") in repository_filter] if repository_filter else raw_bugs
         self._total_bugs = len(self._bugs)
         if self._total_bugs == 0:
             raise ValueError(f"Dataset is empty (filter={repository_filter}) — cannot create environment")
 
-        # Load contributor team & expertise mappings (with caching)
         contributors_path = data_path.replace("bugs_processed.json", "contributors.json")
         if contributors_path not in BugTriageEnv._CONTRIBS_CACHE:
             teams: Dict[str, str] = {}
@@ -97,7 +91,6 @@ class BugTriageEnv:
         
         self._contributor_teams, self._contributor_expertise = BugTriageEnv._CONTRIBS_CACHE[contributors_path]
 
-        # Pre-compute assignee pools per repo (O(1) lookup instead of O(n) scan)
         self._repo_assignees: Dict[str, List[str]] = {}
         _repo_assignee_sets: Dict[str, Set[str]] = {}
         for bug in self._bugs:
@@ -107,25 +100,19 @@ class BugTriageEnv:
                 _repo_assignee_sets.setdefault(repo, set()).add(assignee)
         self._repo_assignees = {r: sorted(a) for r, a in _repo_assignee_sets.items()}
 
-        # Shuffle with fixed seed for reproducibility
         rng = random.Random(seed)
         self._bug_order: List[int] = list(range(self._total_bugs))
         rng.shuffle(self._bug_order)
 
-        # Episode state
         self._episode_number: int = 0
-        self._bug_cursor: int = 0        # index into _bug_order
-        self._task_cursor: int = 0       # index into _TASK_CYCLE
+        self._bug_cursor: int = 0
+        self._task_cursor: int = 0
         self._current_task_id: Optional[str] = None
         self._current_bug: Optional[dict] = None
         self._current_gt: Optional[BugGroundTruth] = None
         self._current_obs: Optional[BugTriageObservation] = None
         self._step_count: int = 0
-        self._waiting_for_step: bool = False  # True after reset, before step
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+        self._waiting_for_step: bool = False
 
     def reset(self, task_id: str = None) -> BugTriageObservation:
         """Start a new episode.
@@ -150,12 +137,10 @@ class BugTriageEnv:
             self._current_task_id = _TASK_CYCLE[self._task_cursor % len(_TASK_CYCLE)]
             self._task_cursor += 1
 
-        # Advance bug cursor (wrap around)
         bug_idx = self._bug_order[self._bug_cursor % self._total_bugs]
         self._bug_cursor += 1
         self._current_bug = self._bugs[bug_idx]
 
-        # Parse ground truth (hidden from agent)
         gt_raw = self._current_bug.get("ground_truth", {})
         self._current_gt = BugGroundTruth(
             bug_id=self._current_bug["bug_id"],
@@ -166,7 +151,6 @@ class BugTriageEnv:
             is_ambiguous=gt_raw.get("is_ambiguous", False),
         )
 
-        # Build BugReport (what the agent sees)
         bug_report = BugReport(
             bug_id=self._current_bug.get("bug_id", "unknown"),
             title=self._current_bug.get("title", ""),
@@ -179,7 +163,6 @@ class BugTriageEnv:
             is_pull_request=False,
         )
 
-        # Populate available_assignees for task_root_cause_assignee
         available_assignees: List[str] = []
         if self._current_task_id == "task_root_cause_assignee":
             available_assignees = self._get_assignees_for_bug(self._current_bug)
@@ -223,19 +206,16 @@ class BugTriageEnv:
         if self._current_obs is None or self._current_gt is None:
             raise RuntimeError("Environment not initialized. Call reset() first.")
 
-        # Validate task_id matches
         if action.task_id != self._current_task_id:
             raise ValueError(
                 f"Action task_id {action.task_id!r} does not match current task {self._current_task_id!r}"
             )
 
-        # Validate bug_id matches
         if action.bug_id != self._current_gt.bug_id:
             raise ValueError(
                 f"Action bug_id {action.bug_id!r} does not match current bug {self._current_gt.bug_id!r}"
             )
 
-        # ── HARDENED GRADING ─────────────────────────────────────────────
         grading_error = None
         try:
             base_score = self._grade(action, self._current_gt)
@@ -245,7 +225,6 @@ class BugTriageEnv:
             base_score = 0.0
             grading_error = str(e)
 
-        # Compute full reward with bonuses
         try:
             reward_model = self._reward_calculator.compute(base_score, action, self._current_gt)
             reward_float = max(0.0, min(1.0, float(reward_model.total)))
@@ -254,7 +233,6 @@ class BugTriageEnv:
             reward_model = _SAFE_REWARD
             reward_float = base_score
 
-        # Build terminal observation
         terminal_obs = BugTriageObservation(
             task_id=self._current_task_id,
             bug_report=self._current_obs.bug_report,
@@ -289,11 +267,7 @@ class BugTriageEnv:
         return terminal_obs, reward_float, True, info
 
     def state(self) -> dict:
-        """Return current environment state.
-
-        Returns:
-            Dict with episode metadata (no bug content, safe to log).
-        """
+        """Return current environment state."""
         return {
             "current_task_id": self._current_task_id,
             "current_bug_id": self._current_bug["bug_id"] if self._current_bug else None,
@@ -304,16 +278,8 @@ class BugTriageEnv:
             "waiting_for_step": self._waiting_for_step,
         }
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
-
     def _grade(self, action: BugTriageAction, gt: BugGroundTruth) -> float:
-        """Dispatch to the correct grader based on current task.
-
-        Passes contributor_teams to the root_cause_assignee grader so that
-        same-team assignees receive partial credit.
-        """
+        """Dispatch to the correct grader based on current task."""
         if self._current_task_id == "task_criticality":
             return grade_criticality(action, gt)
         elif self._current_task_id == "task_severity":
@@ -325,16 +291,11 @@ class BugTriageEnv:
         return 0.0
 
     def _get_assignees_for_bug(self, bug: dict) -> List[str]:
-        """Return a list of candidate assignees for a bug (for task 3 context).
-
-        Uses the pre-computed repo assignee pool for O(1) lookup instead of
-        scanning the entire dataset on every call.
-        """
+        """Return a list of candidate assignees for a bug (for task 3 context)."""
         gt_assignee = bug.get("ground_truth", {}).get("assignee", "")
         repo = bug.get("repo", "")
         pool = self._repo_assignees.get(repo, [])
 
-        # Always include the correct answer + up to 7 distractors
         candidates: Set[str] = set()
         if gt_assignee and gt_assignee != "unknown":
             candidates.add(gt_assignee)

@@ -24,9 +24,6 @@ from openai import OpenAI
 from src.env import BugTriageEnv
 from src.models import BugTriageAction
 
-# ============================================================
-# DISK CACHE
-# ============================================================
 class LlmCache:
     def __init__(self, cache_file="llm_cache.json"):
         self.cache_file = cache_file
@@ -53,9 +50,6 @@ LLM_CACHE = LlmCache()
 
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# CONFIG FROM ENV VARS
-# ============================================================
 API_BASE_URL = os.environ.get("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.environ.get("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
@@ -66,9 +60,6 @@ client = OpenAI(
     api_key=HF_TOKEN or os.environ.get("OPENAI_API_KEY", ""),
 )
 
-# ============================================================
-# PRE-COMPUTED REPO STATS (for smarter assignee prediction)
-# ============================================================
 def _load_repo_stats():
     """Build per-repo assignee frequency from the dataset."""
     from collections import Counter, defaultdict
@@ -80,7 +71,6 @@ def _load_repo_stats():
             assignee = b.get("ground_truth", {}).get("assignee", "")
             if assignee and assignee != "unknown":
                 repo_counts[b["repo"]][assignee] += 1
-        # Top assignees per repo with percentages
         stats = {}
         for repo, counts in repo_counts.items():
             total = sum(counts.values())
@@ -109,9 +99,6 @@ def _load_contributor_expertise():
 REPO_STATS = _load_repo_stats()
 CONTRIBUTOR_EXPERTISE = _load_contributor_expertise()
 
-# ============================================================
-# STRUCTURED LOGGING (required by OpenEnv evaluation)
-# ============================================================
 from typing import List, Optional
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -129,9 +116,6 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
-# ============================================================
-# PROMPT TEMPLATES (compact - fewer tokens = faster inference)
-# ============================================================
 CRITICALITY_SYSTEM_PROMPT = """Classify bug as "critical" or "non_critical".
 
 CRITICAL: crash, segfault, data loss, corruption, security vuln, outage, core feature broken, regression blocking users, deadlock, infinite loop.
@@ -177,11 +161,6 @@ Assignee rules:
 
 Reply ONLY JSON: {"root_cause": "category", "assignee": "username", "confidence": 0.0-1.0, "reasoning": "brief"}"""
 
-
-# ============================================================
-# INFERENCE FUNCTIONS
-# ============================================================
-
 _MAX_LLM_RETRIES = 1
 
 
@@ -210,8 +189,6 @@ def call_llm(system_prompt: str, user_prompt: str) -> dict:
                 content = content.split("\n", 1)[-1].rsplit("```", 1)[0]
             match = re.search(r'\{[^{}]*\}', content, re.DOTALL)
             result = json.loads(match.group()) if match else json.loads(content)
-            
-            # Cache successful results
             LLM_CACHE.set(cache_key, result)
             return result
         except Exception as e:
@@ -304,12 +281,7 @@ def _process_episode(env_args: tuple) -> tuple:
 
 
 def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filter=None) -> list:
-    """Run inference for one task across N episodes with streaming results.
-    
-    1. Collect all observations sequentially (env is stateful).
-    2. Parallel LLM calls.
-    3. Replay and score episodes as soon as they are ready.
-    """
+    """Run inference for one task across N episodes with streaming results."""
     total_episodes = min(num_episodes, env._total_bugs)
     if num_episodes > env._total_bugs:
         logger.info(f"Capping episodes to {total_episodes} (dataset size)")
@@ -336,7 +308,6 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
             assignee=obs.available_assignees[0] if obs.available_assignees else "unknown"
         ))
 
-    # Phase 2 & 3: Parallel LLM calls + Streaming Replay
     llm_results = {}
     env_replay = BugTriageEnv(seed=env._seed, repository_filter=repository_filter)
     scores = []
@@ -376,16 +347,10 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
                     reasoning=action.reasoning,
                 )
 
-                # [START] log before stepping
                 log_start(task_id, "bug-triage", MODEL_NAME)
-
                 _, reward, _, info = env_replay.step(action)
-
-                # [STEP] log after stepping
                 action_str = _format_action(action)
                 log_step(1, action_str, reward, True, error_msg if error_msg != "null" else None)
-
-                # [END] log after episode
                 log_end(reward > 0, 1, reward, [reward])
 
                 scores.append(reward)
@@ -417,9 +382,6 @@ def _format_action_short(action: BugTriageAction) -> str:
         return f"{action.root_cause.value} -> {assignee}"
 
 
-# ============================================================
-# MAIN
-# ============================================================
 def main():
     """Entry point: parse args, run all three tasks and report scores."""
     parser = argparse.ArgumentParser(description="Triage Inference")
@@ -428,11 +390,7 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
-    
-    # Silence httpx unless requested (too noisy for local runs)
     logging.getLogger("httpx").setLevel(logging.WARNING)
-
-    # Auto-save all output to a log file
     log_file = open("output.log", "w", encoding="utf-8")
     import sys
     class Tee:
@@ -445,11 +403,9 @@ def main():
 
     start_time = time.time()
     repo_filter = [r.strip() for r in args.repos.split(",")] if args.repos else None
-    
-    # Initialize initial env just to get total bugs
     env = BugTriageEnv(repository_filter=repo_filter)
     num_total = min(args.episodes, env._total_bugs)
-    
+
     all_scores = []
     task_results = {}
 
