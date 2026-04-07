@@ -30,44 +30,44 @@ __all__ = [
 
 REPO_CONFIGS: Dict[str, dict] = {
     # --- Original 5 ---
-    "pytorch/pytorch":            {"max_issues": 35}}
-    # "pallets/flask":              {"max_issues": 35},
-    # "tiangolo/fastapi":           {"max_issues": 45},
-    # "numpy/numpy":                {"max_issues": 40},
-    # "python/cpython":             {"max_issues": 30},
+    "pytorch/pytorch":            {"max_issues": 35},
+    "pallets/flask":              {"max_issues": 35},
+    "tiangolo/fastapi":           {"max_issues": 45},
+    "numpy/numpy":                {"max_issues": 40},
+    "python/cpython":             {"max_issues": 30},
 
-#     # --- New 10 ---
-#     "pandas-dev/pandas":          {"max_issues": 40},
-#     "scikit-learn/scikit-learn":   {"max_issues": 35},
-#     "google/jax":                 {"max_issues": 35},
-#     "huggingface/transformers":   {"max_issues": 40},
-#     "matplotlib/matplotlib":      {"max_issues": 35},
-#     "pydantic/pydantic":          {"max_issues": 30},
-#     "home-assistant/core":        {"max_issues": 35},
-#     "ansible/ansible":            {"max_issues": 35},
-#     "scipy/scipy":                {"max_issues": 30},
-#     "aws/aws-cli":                {"max_issues": 30},
-# }
+    # --- New 10 ---
+    "pandas-dev/pandas":          {"max_issues": 40},
+    "scikit-learn/scikit-learn":   {"max_issues": 35},
+    "google/jax":                 {"max_issues": 35},
+    "huggingface/transformers":   {"max_issues": 40},
+    "matplotlib/matplotlib":      {"max_issues": 35},
+    "pydantic/pydantic":          {"max_issues": 30},
+    "home-assistant/core":        {"max_issues": 35},
+    "ansible/ansible":            {"max_issues": 35},
+    "scipy/scipy":                {"max_issues": 30},
+    "aws/aws-cli":                {"max_issues": 30},
+}
 
 TEAM_MAP: Dict[str, List[str]] = {
     # --- Original 5 ---
-    "pytorch/pytorch":          ["autograd", "distributed", "jit", "quantization", "mobile", "onnx", "cuda"]}
-    # "pallets/flask":            ["routing", "blueprints", "cli", "testing", "templating", "security"],
-    # "tiangolo/fastapi":         ["routing", "dependencies", "security", "websockets", "openapi", "middleware"],
-    # "numpy/numpy":              ["core", "linalg", "fft", "random", "ma", "testing", "io"],
-    # "python/cpython":           ["stdlib", "interpreter", "gc", "typing", "asyncio", "io", "ssl"]}
+    "pytorch/pytorch":          ["autograd", "distributed", "jit", "quantization", "mobile", "onnx", "cuda"],
+    "pallets/flask":            ["routing", "blueprints", "cli", "testing", "templating", "security"],
+    "tiangolo/fastapi":         ["routing", "dependencies", "security", "websockets", "openapi", "middleware"],
+    "numpy/numpy":              ["core", "linalg", "fft", "random", "ma", "testing", "io"],
+    "python/cpython":           ["stdlib", "interpreter", "gc", "typing", "asyncio", "io", "ssl"],
     # --- New 10 ---
-#     "pandas-dev/pandas":        ["indexing", "io", "groupby", "dtypes", "plotting", "reshaping", "missing-data"],
-#     "scikit-learn/scikit-learn": ["classification", "regression", "clustering", "preprocessing", "metrics", "pipeline"],
-#     "google/jax":               ["compiler", "xla", "autograd", "pmap", "sharding", "random", "linalg"],
-#     "huggingface/transformers": ["modeling", "tokenization", "training", "generation", "onnx", "quantization"],
-#     "matplotlib/matplotlib":    ["axes", "figure", "backends", "animation", "widgets", "text", "colors"],
-#     "pydantic/pydantic":        ["validation", "serialization", "types", "config", "schema", "generics"],
-#     "home-assistant/core":      ["integrations", "automation", "frontend", "config", "networking", "zwave", "mqtt"],
-#     "ansible/ansible":          ["modules", "plugins", "networking", "cloud", "cli", "inventory", "vault"],
-#     "scipy/scipy":              ["optimize", "signal", "sparse", "stats", "integrate", "interpolate", "linalg"],
-#     "aws/aws-cli":              ["s3", "ec2", "iam", "lambda", "cloudformation", "ecs", "cli"],
-# }
+    "pandas-dev/pandas":        ["indexing", "io", "groupby", "dtypes", "plotting", "reshaping", "missing-data"],
+    "scikit-learn/scikit-learn": ["classification", "regression", "clustering", "preprocessing", "metrics", "pipeline"],
+    "google/jax":               ["compiler", "xla", "autograd", "pmap", "sharding", "random", "linalg"],
+    "huggingface/transformers": ["modeling", "tokenization", "training", "generation", "onnx", "quantization"],
+    "matplotlib/matplotlib":    ["axes", "figure", "backends", "animation", "widgets", "text", "colors"],
+    "pydantic/pydantic":        ["validation", "serialization", "types", "config", "schema", "generics"],
+    "home-assistant/core":      ["integrations", "automation", "frontend", "config", "networking", "zwave", "mqtt"],
+    "ansible/ansible":          ["modules", "plugins", "networking", "cloud", "cli", "inventory", "vault"],
+    "scipy/scipy":              ["optimize", "signal", "sparse", "stats", "integrate", "interpolate", "linalg"],
+    "aws/aws-cli":              ["s3", "ec2", "iam", "lambda", "cloudformation", "ecs", "cli"],
+}
 
 
 # ============================================================

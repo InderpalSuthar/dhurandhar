@@ -56,14 +56,14 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # CONFIG FROM ENV VARS
 # ============================================================
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:11434/v1")
-MODEL_NAME = os.environ.get("MODEL_NAME", "llama3.1:8b")
+API_BASE_URL = os.environ.get("API_BASE_URL") or "https://router.huggingface.co/v1"
+MODEL_NAME = os.environ.get("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", "4"))
 
 client = OpenAI(
     base_url=API_BASE_URL,
-    api_key=os.environ.get("OPENAI_API_KEY", "") or HF_TOKEN,
+    api_key=HF_TOKEN or os.environ.get("OPENAI_API_KEY", ""),
 )
 
 # ============================================================
@@ -110,7 +110,27 @@ REPO_STATS = _load_repo_stats()
 CONTRIBUTOR_EXPERTISE = _load_contributor_expertise()
 
 # ============================================================
-# PROMPT TEMPLATES (compact — fewer tokens = faster inference)
+# STRUCTURED LOGGING (required by OpenEnv evaluation)
+# ============================================================
+from typing import List, Optional
+
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+
+# ============================================================
+# PROMPT TEMPLATES (compact - fewer tokens = faster inference)
 # ============================================================
 CRITICALITY_SYSTEM_PROMPT = """Classify bug as "critical" or "non_critical".
 
@@ -141,17 +161,17 @@ Reply ONLY JSON: {"score": 1-5, "confidence": 0.0-1.0, "reasoning": "brief"}"""
 
 TRIAGE_SYSTEM_PROMPT = """Classify root cause and pick assignee.
 
-Categories (environment is ~55% of bugs — prefer it when unsure):
+Categories (environment is ~55% of bugs - prefer it when unsure):
 - environment: runtime, toolchain, build, CI/CD, platform compat, version issues, config, module interaction, JIT/compiler, wrapper gen, framework integration, import failures, GPU/hardware, permissions, dependencies. DEFAULT when ambiguous.
-- bug: PURE logic defect — null deref, off-by-one, wrong return, type error in code itself. Only when code logic is clearly wrong.
+- bug: PURE logic defect - null deref, off-by-one, wrong return, type error in code itself. Only when code logic is clearly wrong.
 - design: architectural flaw, API inconsistency, refactoring needed
-- performance: slow/memory leak/OOM — ONLY when performance is main complaint
+- performance: slow/memory leak/OOM - ONLY when performance is main complaint
 - documentation: docs issues, typos, missing examples
 - external: third-party lib bug (rare)
 
 Assignee rules:
 - Pick EXACTLY one from the provided list
-- Pay attention to the "handles X% of bugs" hints — high-percentage assignees are usually correct
+- Pay attention to the "handles X% of bugs" hints - high-percentage assignees are usually correct
 - If expertise info is provided, match the bug's domain to the assignee's work area
 - When unsure, pick the assignee with the highest percentage for that repo
 
@@ -325,18 +345,13 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
         args = (ed["ep"], task_id, None, ed["bug"], ed["available_assignees"])
         return _process_episode(args)
 
-    print(f"  Evaluating {total_episodes} bugs across {NUM_WORKERS} parallel workers...\n")
-    print(f"  {'#':<5} {'Bug ID':<35} {'Predicted':<22} {'Expected':<22} {'Score':>6}  ")
-    print(f"  {'─'*5} {'─'*35} {'─'*22} {'─'*22} {'─'*6}  ")
-    
+    logger.info(f"Evaluating {total_episodes} bugs across {NUM_WORKERS} parallel workers...")
+
     with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
         futures = {executor.submit(_do_llm, ed): ed["ep"] for ed in episode_data}
-        
-        # We need to replay in order for the logs to look good, but we can't block
-        # until the end. We'll wait for the 'next' expected episode.
+
         next_ep_to_score = 0
         while next_ep_to_score < total_episodes:
-            # Check if our next episode is ready
             ready_ep = None
             for future in futures:
                 if futures[future] == next_ep_to_score and future.done():
@@ -344,12 +359,11 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
                     ep, action, error_msg = future.result()
                     llm_results[ep] = (action, error_msg)
                     break
-            
+
             if ready_ep is not None:
-                # Score it!
                 obs = env_replay.reset(task_id=task_id)
                 action, error_msg = llm_results[ready_ep]
-                
+
                 # Rebuild action
                 action = BugTriageAction(
                     task_id=action.task_id,
@@ -361,32 +375,24 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
                     confidence=action.confidence,
                     reasoning=action.reasoning,
                 )
+
+                # [START] log before stepping
+                log_start(task_id, "bug-triage", MODEL_NAME)
+
                 _, reward, _, info = env_replay.step(action)
-                gt = info.get("ground_truth", {})
-                bug = obs.bug_report
 
-                predicted = _format_action_short(action)
-                if task_id == "task_criticality":
-                    expected = gt.get('criticality', '?')
-                elif task_id == "task_severity":
-                    expected = f"severity {gt.get('severity', '?')}"
-                else:
-                    exp_assignee = gt.get('assignee', '?')
-                    exp_assignee = exp_assignee[:12] if len(exp_assignee) > 12 else exp_assignee
-                    expected = f"{gt.get('root_cause','?')} -> {exp_assignee}"
+                # [STEP] log after stepping
+                action_str = _format_action(action)
+                log_step(1, action_str, reward, True, error_msg if error_msg != "null" else None)
 
-                marker = "+" if reward >= 0.8 else ("~" if reward >= 0.5 else "-")
-                step_line = f"  {ready_ep+1:<5} {bug.bug_id:<35} {predicted:<22} {expected:<22} {reward:>5.2f} [{marker}]"
-                if error_msg != "null":
-                    step_line += f"  (parse error)"
-                print(step_line)
+                # [END] log after episode
+                log_end(reward > 0, 1, reward, [reward])
+
                 scores.append(reward)
-                
                 next_ep_to_score += 1
             else:
-                # Still waiting for the next one. Sleep briefly.
                 time.sleep(0.05)
-                
+
     return scores
 
 
@@ -418,7 +424,7 @@ def main():
     """Entry point: parse args, run all three tasks and report scores."""
     parser = argparse.ArgumentParser(description="Triage Inference")
     parser.add_argument("--repos", type=str, help="Comma-separated repo names to filter")
-    parser.add_argument("--episodes", type=int, default=530, help="Number of episodes per task")
+    parser.add_argument("--episodes", type=int, default=15, help="Number of episodes per task")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
@@ -427,7 +433,7 @@ def main():
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
     # Auto-save all output to a log file
-    log_file = open("output.log", "w")
+    log_file = open("output.log", "w", encoding="utf-8")
     import sys
     class Tee:
         def __init__(self, *streams): self.streams = streams
@@ -460,16 +466,16 @@ def main():
     ]
 
     print("=" * 96)
-    print(f"  BUG TRIAGE ENV — INFERENCE REPORT")
+    print(f"  BUG TRIAGE ENV - INFERENCE REPORT")
     print(f"  Team Dhurandhar")
     print(f"  Model: {MODEL_NAME}  |  Bugs: {num_total}  |  Filter: {repo_filter or 'all repos'}")
     print("=" * 96)
 
     for task_id, num_episodes in tasks:
         label = TASK_LABELS[task_id]
-        print(f"\n{'─' * 96}")
+        print(f"\n{'-' * 96}")
         print(f"  TASK: {label}")
-        print(f"{'─' * 96}\n")
+        print(f"{'-' * 96}\n")
 
         scores = run_task(env, task_id, num_episodes, repository_filter=repo_filter)
         all_scores.extend(scores)
@@ -488,11 +494,11 @@ def main():
     print(f"  SUMMARY")
     print(f"{'=' * 96}")
     print(f"  {'Task':<35} {'Score':>8}")
-    print(f"  {'─'*35} {'─'*8}")
+    print(f"  {'-'*35} {'-'*8}")
     for tid, label in TASK_LABELS.items():
         if tid in task_results:
             print(f"  {label:<35} {task_results[tid]:>8.3f}")
-    print(f"  {'─'*35} {'─'*8}")
+    print(f"  {'-'*35} {'-'*8}")
     print(f"  {'OVERALL':<35} {overall:>8.3f}")
     print(f"{'=' * 96}")
     print(f"  Completed in {elapsed/60:.1f} minutes ({elapsed/len(all_scores) if all_scores else 0:.1f}s per call)")
