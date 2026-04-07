@@ -1,8 +1,5 @@
 """
 Utility functions for Bug Triage environment.
-
-Owner: Sumit
-Status: Day 2 COMPLETE
 """
 
 import json

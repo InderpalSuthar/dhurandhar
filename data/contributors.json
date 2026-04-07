@@ -1,0 +1,120 @@
+{
+  "pytorch/pytorch": {
+    "contributors": [
+      {
+        "name": "pytorchmergebot",
+        "work_area": [
+          "bug",
+          "environment",
+          "documentation"
+        ],
+        "expertise_labels": [
+          "actionable",
+          "bot-mislabeled",
+          "bot-triaged",
+          "dynamo-triage-dec2025",
+          "has workaround",
+          "module: codegen",
+          "module: compile ux",
+          "module: correctness (silent)",
+          "module: cpp",
+          "module: crash",
+          "module: docs",
+          "module: dynamic shapes",
+          "module: dynamo",
+          "module: embedding",
+          "module: fsdp"
+        ]
+      },
+      {
+        "name": "ezyang",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "malfet",
+        "work_area": [
+          "environment"
+        ],
+        "expertise_labels": [
+          "bot-triaged",
+          "module: build",
+          "module: protobuf",
+          "needs reproduction",
+          "oncall: pt2",
+          "triage review",
+          "triaged"
+        ]
+      },
+      {
+        "name": "zou3519",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "jerryzh168",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "cyyever",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "soumith",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "gchanan",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "anijain2305",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "peterbell10",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "apaszke",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "suo",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "Chillee",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "albanD",
+        "work_area": [],
+        "expertise_labels": []
+      },
+      {
+        "name": "janeyx99",
+        "work_area": [],
+        "expertise_labels": []
+      }
+    ],
+    "teams": [
+      "autograd",
+      "distributed",
+      "jit",
+      "quantization",
+      "mobile",
+      "onnx",
+      "cuda"
+    ]
+  }
+}

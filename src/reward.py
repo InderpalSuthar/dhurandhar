@@ -1,30 +1,48 @@
 """
 Reward calculator for Bug Triage environment.
 
-Owner: Inderpal
+Combines the base grader score with bonus signals to produce a richer
+reward that encourages:
+  - Confidence calibration (agent's confidence matches actual accuracy)
+  - Reasoning quality (longer, thoughtful reasoning on correct answers)
+  - Edge case handling (correct classification of ambiguous bugs)
 
-Combines base grader score with bonuses:
-- Confidence calibration
-- Reasoning quality
-- Edge case handling
+Owner: Team Dhurandhar
 """
 
+import logging
 from src.models import BugTriageAction, BugGroundTruth, BugTriageReward
+
+logger = logging.getLogger(__name__)
+
+__all__ = ["RewardCalculator"]
 
 
 class RewardCalculator:
-    """Computes sophisticated rewards beyond raw grader scores."""
+    """Computes sophisticated rewards beyond raw grader scores.
+
+    The total reward is: base_score + confidence_bonus + reasoning_bonus + edge_case_bonus,
+    clamped to [0.0, 1.0].
+    """
 
     def compute(
         self,
         base_score: float,
         action: BugTriageAction,
-        ground_truth: BugGroundTruth
+        ground_truth: BugGroundTruth,
     ) -> BugTriageReward:
-        """Reward = base_score + confidence_bonus + reasoning_bonus + edge_case_bonus
-        Clamped to [0.0, 1.0]
+        """Calculate the full reward with all bonus components.
+
+        Args:
+            base_score: Raw grader score in [0.0, 1.0].
+            action: Agent's action (includes confidence and reasoning).
+            ground_truth: The true labels for this bug.
+
+        Returns:
+            BugTriageReward with base_score, bonuses, and clamped total.
         """
         # 1. Confidence calibration bonus
+        #    Reward agents whose confidence tracks their actual accuracy.
         confidence_diff = abs(action.confidence - base_score)
         if confidence_diff < 0.15:
             confidence_bonus = 0.08
@@ -34,6 +52,7 @@ class RewardCalculator:
             confidence_bonus = -0.05
 
         # 2. Reasoning quality bonus
+        #    Reward detailed reasoning on correct answers.
         reasoning_len = len(action.reasoning.strip())
         if reasoning_len > 50 and base_score > 0.7:
             reasoning_bonus = 0.05
@@ -43,12 +62,13 @@ class RewardCalculator:
             reasoning_bonus = 0.0
 
         # 3. Edge case bonus
+        #    Extra reward for correctly classifying ambiguous bugs.
         if ground_truth.is_ambiguous and base_score == 1.0:
             edge_case_bonus = 0.1
         else:
             edge_case_bonus = 0.0
 
-        # Combine and clamp
+        # Combine and clamp to [0.0, 1.0]
         total = base_score + confidence_bonus + reasoning_bonus + edge_case_bonus
         total = max(0.0, min(1.0, total))
 

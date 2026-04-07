@@ -1,0 +1,62 @@
+# Secrets — never bake into image
+.env
+.env.local
+*.pem
+
+# Git history — not needed at runtime
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Dev / test tooling
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+tests/
+
+# IDE / OS artifacts
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Large raw data not needed for inference
+data/bugs_raw.json
+
+# Logs and temp
+*.log
+logs/
+*.tmp
+*.bak
+
+# Docs / planning artifacts
+*.md
+.claude/
+scripts/
+
+dhurandhar-venv/
+__pycache__/
+.pytest_cache/
+.git/
+*.pyc
+tests/
+*.md
+*.mermaid
+*.svg
+.env
+.claude/

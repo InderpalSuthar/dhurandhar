@@ -1,13 +1,8 @@
 """
 Pydantic models for Bug Report Triage RL Environment.
-
-THIS FILE IS THE SHARED CONTRACT - both Sumit and Inderpal code against these exact definitions.
-ANY CHANGES must be agreed upon by both developers.
-
-Last updated: April 2, 2026
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from enum import Enum
 
@@ -57,8 +52,7 @@ class BugReport(BaseModel):
     author: str
     is_pull_request: bool = False
 
-    class Config:
-        frozen = False
+    model_config = ConfigDict(frozen=False)
 
 
 class BugTriageObservation(BaseModel):
@@ -70,8 +64,7 @@ class BugTriageObservation(BaseModel):
     max_steps: int
     done: bool = False
 
-    class Config:
-        frozen = False
+    model_config = ConfigDict(frozen=False)
 
 
 class BugTriageAction(BaseModel):
@@ -93,8 +86,7 @@ class BugTriageAction(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, default=0.5)
     reasoning: str = ""
 
-    class Config:
-        frozen = False
+    model_config = ConfigDict(frozen=False)
 
 
 class BugTriageReward(BaseModel):
@@ -105,8 +97,7 @@ class BugTriageReward(BaseModel):
     edge_case_bonus: float = 0.0
     total: float = Field(ge=0.0, le=1.0)
 
-    class Config:
-        frozen = False
+    model_config = ConfigDict(frozen=False)
 
 
 class BugGroundTruth(BaseModel):
@@ -118,8 +109,7 @@ class BugGroundTruth(BaseModel):
     assignee: str
     is_ambiguous: bool = False
 
-    class Config:
-        frozen = False
+    model_config = ConfigDict(frozen=False)
 
 
 # ============================================================

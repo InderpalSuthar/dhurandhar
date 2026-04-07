@@ -1,8 +1,16 @@
 """
 Task definitions for Bug Triage environment.
 
-Owner: Sumit
-Status: Day 2 COMPLETE
+Tasks define the RL environment's action space. Each task is a single-step episode.
+The agent observes a bug report and must classify it according to the task requirements.
+Grading is handled by src/graders.py (Inderpal's module).
+
+Three tasks:
+  1. task_criticality (easy) — binary classification: critical vs non-critical
+  2. task_severity (medium) — 5-level scoring with partial credit for off-by-one
+  3. task_root_cause_assignee (hard) — joint classification + assignee selection
+
+All tasks use single-step episodes (done=True after step()).
 """
 
 from typing import List, Dict, Optional
