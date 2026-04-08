@@ -64,7 +64,7 @@ python inference.py --verbose --show-gt --show-details
 
 | Flag             | Description                                                   |
 | ---------------- | ------------------------------------------------------------- |
-| `--verbose`      | Shows the full **Mind of the AI** reasoning for every bug.    |
+| `--verbose`      | Shows the full **Reasoning Highlight** for every bug.         |
 | `--show-gt`      | Displays the **Ground Truth** (correct answer) for comparison. |
 | `--show-details` | Shows the detailed **Reward Breakdown** (bonuses/penalties).  |
 

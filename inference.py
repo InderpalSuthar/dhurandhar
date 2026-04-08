@@ -135,7 +135,7 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
 def print_reasoning_highlight(bug_title: str, reasoning: str):
     """Print a prominent box showing the AI's reasoning for a bug."""
     print("\n  " + "┌" + "─" * 92 + "┐")
-    print("  │ " + f"{BOLD}MIND OF THE AI - REASONING HIGHLIGHT{RESET}".center(90 + 8) + " │")
+    print("  │ " + f"{BOLD}REASONING HIGHLIGHT{RESET}".center(90 + 8) + " │")
     title_display = (bug_title[:77] + "...") if len(bug_title) > 80 else bug_title
     print("  │ " + f"{BOLD}Bug:{RESET} {title_display:<84} │")
     print("  " + "├" + "─" * 92 + "┤")
@@ -403,7 +403,9 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
                     reasoning=action.reasoning,
                 )
 
-                _, reward, _, info = env_replay.step(action)
+                step_obs = env_replay.step(action)
+                reward = getattr(step_obs, "reward", 0.0)
+                info = step_obs.metadata.get("info", {}) if getattr(step_obs, "metadata", None) else {}
                 
                 if reward >= 0.5: total_p += 1
                 else: total_f += 1
