@@ -12,7 +12,9 @@ Status: Final submission — production-grade, hardened
 import json
 import random
 import logging
-from typing import Optional, List, Dict, Set
+from typing import Optional, List, Dict, Set, Any
+from openenv.core.env_server.interfaces import Environment
+from openenv.core.env_server.types import State
 
 from src.models import (
     BugReport,
@@ -36,7 +38,7 @@ _TASK_CYCLE = get_all_task_ids()  # ["task_criticality", "task_severity", "task_
 _SAFE_REWARD = BugTriageReward(base_score=0.0, total=0.0)
 
 
-class BugTriageEnv:
+class BugTriageEnv(Environment):
     """OpenEnv-compliant Bug Triage RL environment.
 
     Each episode presents one bug report. The agent classifies it according
@@ -114,11 +116,13 @@ class BugTriageEnv:
         self._step_count: int = 0
         self._waiting_for_step: bool = False
 
-    def reset(self, task_id: str = None) -> BugTriageObservation:
+    def reset(self, seed: Optional[int] = None, episode_id: Optional[str] = None, **kwargs: Any) -> BugTriageObservation:
         """Start a new episode.
-
+        
         Args:
-            task_id: Force a specific task; None cycles through all three.
+            seed: For reproducible episodes.
+            episode_id: For tracking.
+            kwargs: Can include 'task_id'.
 
         Returns:
             BugTriageObservation for the next bug in the queue.
@@ -127,6 +131,7 @@ class BugTriageEnv:
             ValueError: If task_id is invalid.
         """
         # Determine task for this episode
+        task_id = kwargs.get("task_id")
         if task_id is not None:
             if not validate_task_id(task_id):
                 raise ValueError(f"Unknown task_id: {task_id!r}")
@@ -182,20 +187,17 @@ class BugTriageEnv:
         self._waiting_for_step = True
         return self._current_obs
 
-    def step(self, action: BugTriageAction) -> tuple:
+    def step(self, action: BugTriageAction, timeout_s: Optional[float] = None, **kwargs: Any) -> BugTriageObservation:
         """Process agent's classification action.
 
         HARDENED: Catches all grader/reward errors and returns a valid
-        tuple with reward=0.0 instead of crashing.
+        observation with reward=0.0 instead of crashing.
 
         Args:
             action: BugTriageAction from the agent.
 
         Returns:
-            (observation, reward_float, done, info) tuple.
-            observation is a new BugTriageObservation with done=True.
-            reward_float is a float in [0.0, 1.0].
-            info dict contains ground_truth and reward breakdown.
+            observation is a new BugTriageObservation with done=True and reward info.
 
         Raises:
             RuntimeError: If called before reset() or after episode is done.
@@ -264,19 +266,28 @@ class BugTriageEnv:
 
         self._step_count += 1
         self._waiting_for_step = False
-        return terminal_obs, reward_float, True, info
+        
+        # OpenEnv Standard: Pack reward and done into observation
+        terminal_obs.reward = reward_float
+        terminal_obs.done = True
+        terminal_obs.metadata = {"info": info}
+        
+        return terminal_obs
 
-    def state(self) -> dict:
+    @property
+    def state(self) -> State:
         """Return current environment state."""
-        return {
-            "current_task_id": self._current_task_id,
-            "current_bug_id": self._current_bug["bug_id"] if self._current_bug else None,
-            "episode_number": self._episode_number,
-            "step_count": self._step_count,
-            "total_bugs": self._total_bugs,
-            "tasks_available": _TASK_CYCLE,
-            "waiting_for_step": self._waiting_for_step,
-        }
+        return State(
+            episode_id=str(self._episode_number),
+            step_count=self._step_count,
+            metadata={
+                "current_task_id": self._current_task_id,
+                "current_bug_id": self._current_bug["bug_id"] if self._current_bug else None,
+                "total_bugs": self._total_bugs,
+                "tasks_available": _TASK_CYCLE,
+                "waiting_for_step": self._waiting_for_step,
+            }
+        )
 
     def _grade(self, action: BugTriageAction, gt: BugGroundTruth) -> float:
         """Dispatch to the correct grader based on current task."""

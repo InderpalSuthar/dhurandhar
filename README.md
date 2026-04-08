@@ -1,11 +1,7 @@
 ---
 title: Bug Triage Env
-emoji: "\U0001F41E"
-colorFrom: gray
-colorTo: yellow
 sdk: docker
-pinned: false
-short_description: "@openenv"
+short_description: OpenEnv Bug Triage Environment
 ---
 
 # Bug Triage Env

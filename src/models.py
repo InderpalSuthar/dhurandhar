@@ -5,6 +5,7 @@ Pydantic models for Bug Report Triage RL Environment.
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from enum import Enum
+from openenv.core.env_server.types import Action, Observation
 
 
 class CriticalityLabel(str, Enum):
@@ -47,7 +48,7 @@ class BugReport(BaseModel):
     model_config = ConfigDict(frozen=False)
 
 
-class BugTriageObservation(BaseModel):
+class BugTriageObservation(Observation):
     """What the agent sees at each step."""
     task_id: str  # "task_criticality", "task_severity", "task_root_cause_assignee"
     bug_report: BugReport
@@ -59,7 +60,7 @@ class BugTriageObservation(BaseModel):
     model_config = ConfigDict(frozen=False)
 
 
-class BugTriageAction(BaseModel):
+class BugTriageAction(Action):
     """What the agent returns as its decision."""
     task_id: str
     bug_id: str

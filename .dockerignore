@@ -9,3 +9,7 @@ __pycache__/
 .git
 .claude
 .pytest_cache
+dhurandhar-venv/
+venv/
+env/
+.DS_Store

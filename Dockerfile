@@ -9,13 +9,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY . .
 
-# Environment variables (set at runtime)
-ENV API_BASE_URL=""
-ENV MODEL_NAME=""
-ENV HF_TOKEN=""
+# Copy source code
+COPY . .
 
-# Expose port for HF Spaces
+# Expose port for Hugging Face Spaces (Standard)
 EXPOSE 7860
 
-# Default command
-CMD ["python", "inference.py"]
+# Start the OpenEnv server
+CMD ["python", "-m", "server.app"]
