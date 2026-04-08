@@ -225,10 +225,13 @@ app = create_fastapi_app(create_env, BugTriageAction, BugTriageObservation)
 # Mount Gradio directly at / (the root path) to avoid redirect issues in HuggingFace spaces
 app = gr.mount_gradio_app(app, build_final_ui(), path="/")
 
-if __name__ == "__main__":
+def main():
     import uvicorn
     import os
     port = int(os.environ.get("PORT", 7860))
     print(f"🚀 Starting Dhurandhar Bug Triage Environment on port {port}...")
     print(f"🔗 UI available at: http://0.0.0.0:{port}/")
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    main()
