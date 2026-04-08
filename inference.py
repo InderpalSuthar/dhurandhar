@@ -126,10 +126,7 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     conf_str = f" | Conf: {confidence:.0%}" if confidence > 0 else " | Conf: --"
     gt_str = f" | GT: {gt:<15}" if gt else ""
     
-    if action.startswith("CRITICALITY:"): action_pad = 28
-    elif action.startswith("SEVERITY:"): action_pad = 15
-    else: action_pad = 40
-    print(f"  {status:<9} {bug_info:<45} | Action: {action:<{action_pad}} {gt_str}{conf_str} | Reward: {reward:.2f}{err_str}", flush=True)
+    print(f"  {status:<9} {bug_info:<45} | Action: {action:<40} {gt_str}{conf_str} | Reward: {reward:.2f}{err_str}", flush=True)
     
     if details:
         b = details
