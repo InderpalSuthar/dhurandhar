@@ -219,18 +219,21 @@ def build_final_ui():
                 
     return demo
 
-# 3. Build the FastAPI app and mount Gradio UI at root
-# NOTE: create_fastapi_app registers the OpenEnv REST API routes (/reset, /step, /health, etc.)
-# We mount the Gradio UI at "/" so the Space loads the dashboard immediately.
+# 3. Build the FastAPI app (registers /reset, /step, /health, /schema, etc.)
 app = create_fastapi_app(create_env, BugTriageAction, BugTriageObservation)
 
-# Mount Gradio at root — no manual redirect needed (Gradio handles it)
-app = gr.mount_gradio_app(app, build_final_ui(), path="/")
+# Add root redirect: / → /web/ (OpenEnv standard; HF health checker hits /web)
+@app.get("/", include_in_schema=False)
+async def root_redirect():
+    return RedirectResponse(url="/web/")
+
+# Mount Gradio at /web (the OpenEnv standard path)
+app = gr.mount_gradio_app(app, build_final_ui(), path="/web")
 
 if __name__ == "__main__":
     import uvicorn
     import os
     port = int(os.environ.get("PORT", 7860))
     print(f"🚀 Starting Dhurandhar Bug Triage Environment on port {port}...")
-    print(f"🔗 UI available at: http://0.0.0.0:{port}/")
+    print(f"🔗 UI available at: http://0.0.0.0:{port}/web/")
     uvicorn.run(app, host="0.0.0.0", port=port)
