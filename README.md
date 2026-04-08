@@ -1,3 +1,12 @@
+---
+title: Bug Triage Env
+colorFrom: gray
+colorTo: yellow
+sdk: docker
+pinned: false
+short_description: "@openenv"
+---
+
 # Bug Triage Env
 
 **Meta/PyTorch OpenEnv Hackathon - Round 1 | Team Dhurandhar**
