@@ -51,14 +51,18 @@ LLM_CACHE = LlmCache()
 
 logger = logging.getLogger(__name__)
 
-API_BASE_URL = os.environ.get("API_BASE_URL") or "https://router.huggingface.co/v1"
-MODEL_NAME = os.environ.get("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
-HF_TOKEN = os.environ.get("HF_TOKEN", "")
-NUM_WORKERS = int(os.environ.get("NUM_WORKERS", "4"))
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+# Optional - if you use from_docker_image():
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
+
+NUM_WORKERS = int(os.getenv("NUM_WORKERS", "4"))
 
 client = OpenAI(
     base_url=API_BASE_URL,
-    api_key=HF_TOKEN or os.environ.get("OPENAI_API_KEY", ""),
+    api_key=HF_TOKEN or os.getenv("OPENAI_API_KEY", "dummy"),
 )
 
 def _load_repo_stats():
