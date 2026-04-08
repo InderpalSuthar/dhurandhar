@@ -9,6 +9,9 @@ openenv-core>=0.1.0
 # LLM + API
 openai>=1.0
 requests>=2.31
+gradio>=4.0
+fastapi>=0.100
+uvicorn>=0.20
 
 # Data + GitHub (for data pipeline)
 PyGithub>=2.0

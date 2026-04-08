@@ -1,7 +1,13 @@
 ---
 title: Bug Triage Env
+emoji: 🐞
+colorFrom: blue
+colorTo: indigo
 sdk: docker
-short_description: OpenEnv Bug Triage Environment
+app_port: 7860
+pinned: false
+tags:
+- openenv
 ---
 
 # Bug Triage Env
