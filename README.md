@@ -1,12 +1,3 @@
----
-title: Bug Triage Env
-colorFrom: gray
-colorTo: yellow
-sdk: docker
-pinned: false
-short_description: "@openenv"
----
-
 # Bug Triage Env
 
 **Meta/PyTorch OpenEnv Hackathon - Round 1 | Team Dhurandhar**
@@ -65,6 +56,7 @@ This outputs results in the mandatory `[START]/[STEP]/[END]` format. Options inc
 ## Environment Architecture
 
 ### The Problem
+
 Open-source maintainers receive hundreds of issues weekly. Bug Triage Env automates the triage process by training agents to determine issue criticality, severity, root cause, and appropriate assignee.
 
 ### Tasks & Grading
@@ -74,6 +66,7 @@ Open-source maintainers receive hundreds of issues weekly. Bug Triage Env automa
 3. **Root Cause & Assignee (Hard)**: Dual-prediction task. Score = `(0.6 * root_cause_score) + (0.4 * assignee_score)`. Partial credit is given for selecting related root causes or assignees from the correct team.
 
 ### Reward Function
+
 Total Reward = Base Score + Confidence Bonus + Reasoning Bonus + Edge Case Bonus (clamped between 0.0 and 1.0).
 Agents are specifically rewarded for highly calibrated confidence estimations and detailed reasoning.
 
