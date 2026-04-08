@@ -3,8 +3,8 @@ import os
 from pathlib import Path
 
 # Configure README path for OpenEnv documentation
-# In Docker, this is in /app/README.md
-os.environ["ENV_README_PATH"] = "/app/README.md"
+# Ensure the README path points relative to the project root so it works outside of strict /app containers.
+os.environ["ENV_README_PATH"] = str(Path(__file__).parent.parent / "README.md")
 
 from openenv.core.env_server.web_interface import create_web_interface_app
 from src.env import BugTriageEnv
@@ -49,8 +49,8 @@ def format_bug_observation(data: dict) -> str:
 def custom_gradio_builder(web_manager, action_fields, metadata, is_chat_env, title, quick_start_md):
     """Builds a premium, documentation-first UI for judges."""
     # Load README for the main display
-    readme_path = Path("/app/README.md")
-    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else "README.md not found in /app/."
+    readme_path = Path(__file__).parent.parent / "README.md"
+    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else f"README.md not found at {readme_path}."
 
     with gr.Blocks(title="Dhurandhar Bug Triage") as demo:
         # README moved to dedicated tab - keeping dashboard clean
@@ -173,8 +173,8 @@ def build_custom_playground(web_manager, action_fields):
 # --- FINAL SERVER ARCHITECTURE ---
 def build_final_ui():
     # Load README for the dedicated tab
-    readme_path = Path("/app/README.md")
-    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else "README.md not found in /app/."
+    readme_path = Path(__file__).parent.parent / "README.md"
+    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else f"README.md not found at {readme_path}."
     
     # Create clean metadata to HIDE all sidebars in other tabs
     metadata_clean = metadata.model_copy()
