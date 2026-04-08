@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 
 # Configure README path for OpenEnv documentation
-os.environ["ENV_README_PATH"] = str(Path(__file__).parent.parent / "README.md")
+# In Docker, this is in /app/README.md
+os.environ["ENV_README_PATH"] = "/app/README.md"
 
 from openenv.core.env_server.web_interface import create_web_interface_app
 from src.env import BugTriageEnv
@@ -48,8 +49,8 @@ def format_bug_observation(data: dict) -> str:
 def custom_gradio_builder(web_manager, action_fields, metadata, is_chat_env, title, quick_start_md):
     """Builds a premium, documentation-first UI for judges."""
     # Load README for the main display
-    readme_path = Path(__file__).parent.parent / "README.md"
-    readme_content = readme_path.read_text() if readme_path.exists() else "No documentation found."
+    readme_path = Path("/app/README.md")
+    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else "README.md not found in /app/."
 
     with gr.Blocks(title="Dhurandhar Bug Triage") as demo:
         # README moved to dedicated tab - keeping dashboard clean
@@ -79,8 +80,8 @@ def custom_gradio_builder(web_manager, action_fields, metadata, is_chat_env, tit
                             inputs.append(gr.Textbox(label=label, visible=visible))
                 
                 with gr.Row():
-                    reset_btn = gr.Button("🔄 New Bug", variant="secondary")
-                    step_btn = gr.Button("🚀 Submit Decison", variant="primary")
+                    reset_btn = gr.Button("🔄 New Bug", variant="secondary", size="lg")
+                    step_btn = gr.Button("🚀 Submit Decision", variant="primary", size="lg")
                 
                 gr.Markdown("> **Goal:** Correct 500+ real-world bugs across 15 repositories.")
 
@@ -172,8 +173,8 @@ def build_custom_playground(web_manager, action_fields):
 # --- FINAL SERVER ARCHITECTURE ---
 def build_final_ui():
     # Load README for the dedicated tab
-    readme_path = Path(__file__).parent.parent / "README.md"
-    readme_content = readme_path.read_text() if readme_path.exists() else "No README found."
+    readme_path = Path("/app/README.md")
+    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else "README.md not found in /app/."
     
     # Create clean metadata to HIDE all sidebars in other tabs
     metadata_clean = metadata.model_copy()
@@ -218,21 +219,18 @@ def build_final_ui():
                 
     return demo
 
-# 3. Mount to FastAPI
+# 3. Build the FastAPI app and mount Gradio UI at root
+# NOTE: create_fastapi_app registers the OpenEnv REST API routes (/reset, /step, /health, etc.)
+# We mount the Gradio UI at "/" so the Space loads the dashboard immediately.
 app = create_fastapi_app(create_env, BugTriageAction, BugTriageObservation)
 
-@app.get("/", include_in_schema=False)
-async def root_redirect():
-    return RedirectResponse(url="/web/")
+# Mount Gradio at root — no manual redirect needed (Gradio handles it)
+app = gr.mount_gradio_app(app, build_final_ui(), path="/")
 
-app = gr.mount_gradio_app(app, build_final_ui(), path="/web")
-
-def main():
-    """Entry point for the OpenEnv server."""
+if __name__ == "__main__":
     import uvicorn
     import os
     port = int(os.environ.get("PORT", 7860))
+    print(f"🚀 Starting Dhurandhar Bug Triage Environment on port {port}...")
+    print(f"🔗 UI available at: http://0.0.0.0:{port}/")
     uvicorn.run(app, host="0.0.0.0", port=port)
-
-if __name__ == "__main__":
-    main()
