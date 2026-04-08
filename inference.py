@@ -126,18 +126,23 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     conf_str = f" | Conf: {confidence:.0%}" if confidence > 0 else " | Conf: --"
     gt_str = f" | GT: {gt:<15}" if gt else ""
     
-    print(f"  {status} {bug_info:<40} | Action: {action:<30} {gt_str}{conf_str} | Reward: {reward:.2f}{err_str}", flush=True)
+    if action.startswith("CRITICALITY:"): action_pad = 28
+    elif action.startswith("SEVERITY:"): action_pad = 15
+    else: action_pad = 40
+    print(f"  {status:<9} {bug_info:<45} | Action: {action:<{action_pad}} {gt_str}{conf_str} | Reward: {reward:.2f}{err_str}", flush=True)
     
     if details:
         b = details
         print(f"    {CYAN}├─ Reward Breakdown: base={b['base_score']:.2f}, conf={b['confidence_bonus']:.2f}, reason={b['reasoning_bonus']:.2f}, edge={b['edge_case_bonus']:.2f}{RESET}")
 
-def print_reasoning_highlight(bug_title: str, reasoning: str):
+def print_reasoning_highlight(bug_title: str, action_str: str, reasoning: str):
     """Print a prominent box showing the AI's reasoning for a bug."""
     print("\n  " + "┌" + "─" * 92 + "┐")
-    print("  │ " + f"{BOLD}REASONING HIGHLIGHT{RESET}".center(90 + 8) + " │")
+    print("  │ " + f"{BOLD}REASONING HIGHLIGHT{RESET}".center(90) + " │")
     title_display = (bug_title[:77] + "...") if len(bug_title) > 80 else bug_title
-    print("  │ " + f"{BOLD}Bug:{RESET} {title_display:<84} │")
+    print("  │ " + f"{BOLD}Bug:{RESET} {title_display:<85} │")
+    action_display = (action_str[:74] + "...") if len(action_str) > 77 else action_str
+    print("  │ " + f"{BOLD}Action:{RESET} {action_display:<82} │")
     print("  " + "├" + "─" * 92 + "┤")
     
     # Wrap reasoning text
@@ -420,7 +425,7 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
                     action_str = _format_action(action)
                     bug_label = f"Bug #{obs.bug_report.bug_id} ({obs.bug_report.repo.split('/')[-1]})"
                     if next_ep_to_score == 0:
-                        print_reasoning_highlight(obs.bug_report.title, action.reasoning)
+                        print_reasoning_highlight(obs.bug_report.title, action_str, action.reasoning)
                     
                     gt_val = None
                     if show_gt:
