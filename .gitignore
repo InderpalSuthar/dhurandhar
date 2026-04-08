@@ -45,3 +45,6 @@ logs/
 *.bak
 .claude/
 llm_cache.json
+
+# Internal hackathon reference notes — not part of submission
+hackathon.md

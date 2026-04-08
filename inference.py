@@ -15,6 +15,7 @@ import re
 import time
 import logging
 import argparse
+from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 
@@ -54,14 +55,6 @@ API_BASE_URL = os.environ.get("API_BASE_URL") or "https://router.huggingface.co/
 MODEL_NAME = os.environ.get("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", "4"))
-
-HF_TOKEN = os.environ.get("HF_TOKEN", "")
-NUM_WORKERS = int(os.environ.get("NUM_WORKERS", "4"))
-
-# UI Placeholders (Simple Mode)
-BOLD = ""
-RESET = ""
-CYAN = ""
 
 client = OpenAI(
     base_url=API_BASE_URL,
@@ -107,55 +100,22 @@ def _load_contributor_expertise():
 REPO_STATS = _load_repo_stats()
 CONTRIBUTOR_EXPERTISE = _load_contributor_expertise()
 
-from typing import List, Optional
 
 def log_start(task: str, env: str, model: str) -> None:
-    # Silent in terminal, only for log file if needed
-    pass
+    """Emit the mandatory [START] line for the automated judge."""
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
-def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str], 
-             bug_info: str = "", confidence: float = 0.0, 
-             gt: Optional[str] = None, details: Optional[dict] = None) -> None:
-    status = "[PASS]" if reward >= 1.0 else ("[PARTIAL]" if reward > 0.05 else "[FAIL]")
-    
-    # Truncate long error messages for a cleaner UI
-    if error and len(error) > 50:
-        error = error[:47] + "..."
-        
-    err_str = f" | error={error}" if error else ""
-    conf_str = f" | Conf: {confidence:.0%}" if confidence > 0 else " | Conf: --"
-    gt_str = f" | GT: {gt:<15}" if gt else ""
-    
-    print(f"  {status:<9} {bug_info:<45} | Action: {action:<40} {gt_str}{conf_str} | Reward: {reward:.2f}{err_str}", flush=True)
-    
-    if details:
-        b = details
-        print(f"    {CYAN}├─ Reward Breakdown: base={b['base_score']:.2f}, conf={b['confidence_bonus']:.2f}, reason={b['reasoning_bonus']:.2f}, edge={b['edge_case_bonus']:.2f}{RESET}")
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    """Emit the mandatory [STEP] line for the automated judge."""
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
-def print_reasoning_highlight(bug_title: str, action_str: str, reasoning: str):
-    """Print a prominent box showing the AI's reasoning for a bug."""
-    print("\n  " + "┌" + "─" * 92 + "┐")
-    print("  │ " + f"{BOLD}REASONING HIGHLIGHT{RESET}".center(90) + " │")
-    title_display = (bug_title[:77] + "...") if len(bug_title) > 80 else bug_title
-    print("  │ " + f"{BOLD}Bug:{RESET} {title_display:<85} │")
-    action_display = (action_str[:74] + "...") if len(action_str) > 77 else action_str
-    print("  │ " + f"{BOLD}Action:{RESET} {action_display:<82} │")
-    print("  " + "├" + "─" * 92 + "┤")
-    
-    # Wrap reasoning text
-    max_w = 90
-    lines = []
-    import textwrap
-    for line in textwrap.wrap(reasoning or "No reasoning provided.", width=max_w):
-        lines.append(f"  │ {line:<90} │")
-    
-    for l in lines:
-        print(l)
-    print("  " + "└" + "─" * 92 + "┘\n")
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
-    # Silent in terminal
-    pass
+    """Emit the mandatory [END] line for the automated judge."""
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 CRITICALITY_SYSTEM_PROMPT = """Classify bug as "critical" or "non_critical".
 
@@ -228,8 +188,7 @@ def call_llm(system_prompt: str, user_prompt: str) -> dict:
             content = response.choices[0].message.content.strip()
             if content.startswith("```"):
                 content = content.split("\n", 1)[-1].rsplit("```", 1)[0]
-            
-            # Simple case: model just says "OK" or similar
+
             if content.upper() == "OK":
                 return {"status": "OK"}
 
@@ -239,7 +198,6 @@ def call_llm(system_prompt: str, user_prompt: str) -> dict:
                 LLM_CACHE.set(cache_key, result)
                 return result
             except json.JSONDecodeError:
-                # If it's not JSON, return whatever text we got
                 return {"text": content}
         except Exception as e:
             last_error = str(e)
@@ -248,7 +206,6 @@ def call_llm(system_prompt: str, user_prompt: str) -> dict:
     return {"error": last_error}
 
 
-# Default fallbacks when LLM fails
 DEFAULTS = {
     "task_criticality": {"classification": "non_critical", "confidence": 0.5, "reasoning": "default"},
     "task_severity": {"score": 3, "confidence": 0.5, "reasoning": "default"},
@@ -330,9 +287,12 @@ def _process_episode(env_args: tuple) -> tuple:
     return ep, action, error_msg
 
 
-def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filter=None, 
+def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filter=None,
              verbose=False, show_gt=False, show_details=False) -> list:
-    """Run inference for one task across N episodes with streaming results."""
+    """Run inference for one task across N episodes with streaming results.
+    
+    Emits [START]/[STEP]/[END] lines per the OpenEnv mandatory format.
+    """
     total_episodes = min(num_episodes, env._total_bugs)
     if num_episodes > env._total_bugs:
         logger.info(f"Capping episodes to {total_episodes} (dataset size)")
@@ -351,7 +311,7 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
         })
         # Dummy step to satisfy env invariants
         temp_env.step(BugTriageAction(
-            task_id=task_id, bug_id=bug.bug_id, 
+            task_id=task_id, bug_id=bug.bug_id,
             confidence=0.5, reasoning="",
             criticality="non_critical" if task_id == "task_criticality" else None,
             severity=3 if task_id == "task_severity" else None,
@@ -362,24 +322,21 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
     llm_results = {}
     env_replay = BugTriageEnv(seed=env._seed, repository_filter=repository_filter)
     scores = []
-    repo_scores = {} # Track scores per repo: {repo_name: [list_of_scores]}
-    
+    all_rewards: List[float] = []  # Flat list for [END] line
+    repo_scores = {}
+
     def _do_llm(ed):
         args = (ed["ep"], task_id, None, ed["bug"], ed["available_assignees"])
         return _process_episode(args)
 
     logger.info(f"Evaluating {total_episodes} bugs across {NUM_WORKERS} parallel workers...")
 
-    is_compact = total_episodes > 5 and not verbose
-    if is_compact:
-        print(f"  Progress: [--------------------] 0% | PASS: 0, FAIL: 0", end="\r", flush=True)
+    log_start(task=task_id, env="bug-triage", model=MODEL_NAME)
 
     with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
         futures = {executor.submit(_do_llm, ed): ed["ep"] for ed in episode_data}
 
         next_ep_to_score = 0
-        total_p = 0
-        total_f = 0
         while next_ep_to_score < total_episodes:
             ready_ep = None
             for future in futures:
@@ -392,8 +349,7 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
             if ready_ep is not None:
                 obs = env_replay.reset(task_id=task_id)
                 action, error_msg = llm_results[ready_ep]
-                
-                # ... same action rebuilding logic ...
+
                 action = BugTriageAction(
                     task_id=action.task_id,
                     bug_id=obs.bug_report.bug_id,
@@ -408,35 +364,18 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
                 step_obs = env_replay.step(action)
                 reward = getattr(step_obs, "reward", 0.0)
                 info = step_obs.metadata.get("info", {}) if getattr(step_obs, "metadata", None) else {}
-                
-                if reward >= 0.5: total_p += 1
-                else: total_f += 1
 
-                if is_compact:
-                    # Update Progress Bar
-                    pct = int((next_ep_to_score + 1) / total_episodes * 100)
-                    filled = int(pct / 5)
-                    bar = "#" * filled + "-" * (20 - filled)
-                    print(f"  Progress: [{bar}] {pct}% | PASS: {total_p}, FAIL: {total_f}", end="\r", flush=True)
-                else:
-                    action_str = _format_action(action)
-                    bug_label = f"Bug #{obs.bug_report.bug_id} ({obs.bug_report.repo.split('/')[-1]})"
-                    if next_ep_to_score == 0:
-                        print_reasoning_highlight(obs.bug_report.title, action_str, action.reasoning)
-                    
-                    gt_val = None
-                    if show_gt:
-                        gt_map = info.get("ground_truth", {})
-                        if task_id == "task_criticality": gt_val = gt_map.get("criticality")
-                        elif task_id == "task_severity": gt_val = str(gt_map.get("severity"))
-                        else: gt_val = f"{gt_map.get('root_cause')}->{gt_map.get('assignee')}"
-
-                    log_step(1, action_str, reward, True, error_msg if error_msg != "null" else None, 
-                            bug_info=bug_label, confidence=action.confidence, 
-                            gt=gt_val, details=info.get("reward_breakdown") if show_details else None)
+                action_str = _format_action(action)
+                log_step(
+                    step=next_ep_to_score + 1,
+                    action=action_str,
+                    reward=reward,
+                    done=True,
+                    error=error_msg if error_msg != "null" else None,
+                )
 
                 scores.append(reward)
-                # ... same repo tracking ...
+                all_rewards.append(reward)
                 repo = obs.bug_report.repo
                 if repo not in repo_scores:
                     repo_scores[repo] = []
@@ -445,8 +384,12 @@ def run_task(env: BugTriageEnv, task_id: str, num_episodes: int, repository_filt
                 next_ep_to_score += 1
             else:
                 time.sleep(0.05)
-        
-        if is_compact: print("") # Newline after progress bar
+
+    avg_score = sum(scores) / len(scores) if scores else 0.0
+    avg_score = min(max(avg_score, 0.0), 1.0)
+    success = avg_score >= 0.5
+    log_end(success=success, steps=len(scores), score=avg_score, rewards=all_rewards)
+
     return scores, repo_scores
 
 
@@ -481,35 +424,13 @@ def main():
     parser.add_argument("--show-details", action="store_true", help="Show detailed reward breakdown")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s | %(name)s | %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    log_file = open("output.log", "w", encoding="utf-8")
-    import sys
-    class Tee:
-        def __init__(self, *streams): self.streams = streams
-        def write(self, data):
-            for s in self.streams: s.write(data)
-        def flush(self):
-            for s in self.streams: s.flush()
-    sys.stdout = Tee(sys.__stdout__, log_file)
 
     start_time = time.time()
     repo_filter = [r.strip() for r in args.repos.split(",")] if args.repos else None
     env = BugTriageEnv(repository_filter=repo_filter)
     num_total = min(args.episodes, env._total_bugs)
-
-    # Fast-fail connection test
-    print(f"  Testing LLM connection ({MODEL_NAME})... ", end="", flush=True)
-    test_res = call_llm("Reply ONLY with the word OK", "Say OK")
-    if "error" in test_res:
-        print(f"FAILED")
-        print(f"\n[CRITICAL ERROR] LLM connection failed: {test_res['error']}")
-        print(f"Please check your HF_TOKEN and permissions at: https://huggingface.co/settings/tokens")
-        print("-" * 96)
-        # We continue anyway to show partial results with defaults, 
-        # but the user has been warned.
-    else:
-        print(f"SUCCESS")
 
     all_scores = []
     task_results = {}
@@ -526,35 +447,25 @@ def main():
         ("task_root_cause_assignee", num_total),
     ]
 
-    print("=" * 96)
-    print(f"  BUG TRIAGE ENV - INFERENCE REPORT")
-    print(f"  Team Dhurandhar")
-    print(f"  Model: {MODEL_NAME}  |  Bugs: {num_total}  |  Filter: {repo_filter or 'all repos'}")
-    print("-" * 96)
-    print(f"  LEGEND: [PASS] Reward >= 1.0 | [PARTIAL] Reward 0.1-0.9 | [FAIL] Reward <= 0.0")
-    print("=" * 96)
-
     for task_id, num_episodes in tasks:
         label = TASK_LABELS[task_id]
-        print(f"\n# TASK: {label.upper()}")
-        print("-" * 96)
 
-        scores, r_scores = run_task(env, task_id, num_episodes, repository_filter=repo_filter,
-                                   verbose=args.verbose, show_gt=args.show_gt, show_details=args.show_details)
+        try:
+            scores, r_scores = run_task(env, task_id, num_episodes, repository_filter=repo_filter,
+                                       verbose=args.verbose, show_gt=args.show_gt, show_details=args.show_details)
+        except Exception as e:
+            # Guarantee a matching [END] line even if run_task raised after [START]
+            logger.error(f"Task {task_id} failed: {e}")
+            log_end(success=False, steps=0, score=0.0, rewards=[])
+            scores, r_scores = [], {}
+
         all_scores.extend(scores)
-        
-        # Merge task-specific repo scores into global tracker
-        # We store them separately per task for analytical reasons
+
         if task_id not in task_results:
             task_results[task_id] = {"avg": 0, "repo_breakdown": r_scores}
-        
-        avg = sum(scores) / len(scores) if scores else 0.0
-        perfect = sum(1 for s in scores if s >= 1.0)
-        good = sum(1 for s in scores if 0.5 <= s < 1.0)
-        bad = sum(1 for s in scores if s < 0.5)
-        task_results[task_id]["avg"] = avg
 
-        print(f"\n  Result: {avg:.3f}  |  {perfect} correct  {good} partial  {bad} wrong  (out of {len(scores)})")
+        avg = sum(scores) / len(scores) if scores else 0.0
+        task_results[task_id]["avg"] = avg
 
     overall = sum(all_scores) / len(all_scores) if all_scores else 0.0
     elapsed = time.time() - start_time
@@ -572,13 +483,11 @@ def main():
     print(f"  {'OVERALL':<35} {overall:>8.3f}")
     print(f"{'=' * 96}")
 
-    # Add Repo Performance Breakdown
     print(f"\n  PERFORMANCE BY REPOSITORY")
     print(f"  " + "-" * 44)
     print(f"  {'Repository':<35} {'Score':>8}")
     print(f"  " + "-" * 44)
-    
-    # Calculate global per-repo scores across all tasks
+
     all_repo_data = {}
     for tid in task_results:
         for r, r_scores in task_results[tid]["repo_breakdown"].items():

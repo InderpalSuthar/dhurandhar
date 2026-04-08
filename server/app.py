@@ -2,15 +2,13 @@ import gradio as gr
 import os
 from pathlib import Path
 
-# Configure README path for OpenEnv documentation
-# Ensure the README path points relative to the project root so it works outside of strict /app containers.
-os.environ["ENV_README_PATH"] = str(Path(__file__).parent.parent / "README.md")
+# Inside the Docker image the README is mounted at /app/README.md
+os.environ["ENV_README_PATH"] = "/app/README.md"
 
 from openenv.core.env_server.web_interface import create_web_interface_app
 from src.env import BugTriageEnv
 from src.models import BugTriageAction, BugTriageObservation
 
-# --- CUSTOM UI FORMATTER ---
 def format_bug_observation(data: dict) -> str:
     """Formats the BugTriageObservation for a premium Markdown display."""
     obs = data.get("observation", {})
@@ -33,8 +31,7 @@ def format_bug_observation(data: dict) -> str:
     if obs.get("available_assignees"):
         md += "#### 👥 Candidate Assignees\n"
         md += ", ".join([f"`{a}`" for a in obs["available_assignees"]]) + "\n"
-    
-    # Show results if step was taken
+
     if data.get("done"):
         reward = data.get("reward", 0)
         md += f"\n---\n### ✅ Submission Result\n**Reward Score:** `{reward}`\n"
@@ -45,15 +42,12 @@ def format_bug_observation(data: dict) -> str:
         
     return md
 
-# --- CUSTOM UI BUILDER ---
 def custom_gradio_builder(web_manager, action_fields, metadata, is_chat_env, title, quick_start_md):
     """Builds a premium, documentation-first UI for judges."""
-    # Load README for the main display
-    readme_path = Path(__file__).parent.parent / "README.md"
-    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else f"README.md not found at {readme_path}."
+    readme_path = Path("/app/README.md")
+    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else "README.md not found in /app/."
 
     with gr.Blocks(title="Dhurandhar Bug Triage") as demo:
-        # README moved to dedicated tab - keeping dashboard clean
         gr.Markdown("# 🤖 Bug Triage Dashboard")
         
         with gr.Row():
@@ -101,8 +95,7 @@ def custom_gradio_builder(web_manager, action_fields, metadata, is_chat_env, tit
             data = await web_manager.step_environment(action_data)
             return format_bug_observation(data), data
 
-        # Wire up reset to also populate task_id and bug_id hidden fields
-        # Find indices of task_id and bug_id
+        # Wire reset() to also populate the hidden task_id and bug_id fields
         tid_idx = next(i for i, f in enumerate(action_fields) if f["name"] == "task_id")
         bid_idx = next(i for i, f in enumerate(action_fields) if f["name"] == "bug_id")
         
@@ -111,8 +104,6 @@ def custom_gradio_builder(web_manager, action_fields, metadata, is_chat_env, tit
         
     return demo
 
-# --- SERVER STARTUP ---
-# --- FINAL SERVER ARCHITECTURE ---
 from openenv.core.env_server.web_interface import WebInterfaceManager, load_environment_metadata, _extract_action_fields, _is_chat_env, get_quick_start_markdown, build_gradio_app
 from openenv.core.env_server.http_server import create_fastapi_app
 from openenv.core.env_server.gradio_theme import OPENENV_GRADIO_CSS, OPENENV_GRADIO_THEME
@@ -126,7 +117,7 @@ metadata = load_environment_metadata(create_env, env_name="bug-triage")
 web_manager = WebInterfaceManager(create_env, BugTriageAction, BugTriageObservation, metadata)
 action_fields = _extract_action_fields(BugTriageAction)
 
-# --- CUSTOM PLAYGROUND BUILDER (Sidebar-free) ---
+
 def build_custom_playground(web_manager, action_fields):
     """A clean, full-width implementation of the technical console."""
     with gr.Column():
@@ -170,18 +161,15 @@ def build_custom_playground(web_manager, action_fields):
     reset_btn.click(run_reset, outputs=[status, raw_json, obs_display])
     step_btn.click(run_step, inputs=inputs, outputs=[status, raw_json, obs_display])
 
-# --- FINAL SERVER ARCHITECTURE ---
 def build_final_ui():
-    # Load README for the dedicated tab
-    readme_path = Path(__file__).parent.parent / "README.md"
-    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else f"README.md not found at {readme_path}."
+    readme_path = Path("/app/README.md")
+    readme_content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else "README.md not found in /app/."
     
     # Create clean metadata to HIDE all sidebars in other tabs
     metadata_clean = metadata.model_copy()
     metadata_clean.readme_content = None
     
-    # Aggressive CSS to kill all sidebars and preserve TRUE full-width
-    # Aggressive CSS to kill all sidebars and preserve TRUE full-width
+    # Aggressive CSS to kill all sidebars and preserve true full-width
     CUSTOM_FULL_WIDTH_CSS = OPENENV_GRADIO_CSS + """
     .gradio-container { max-width: 100% !important; margin: 0 !important; width: 100% !important; }
     .col-left { display: none !important; width: 0 !important; visibility: hidden !important; }

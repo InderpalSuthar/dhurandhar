@@ -1,5 +1,7 @@
-# Bug Report Triage RL Environment
+# Bug Report Triage RL Environment — Core Runtime
 # Python 3.11+
+# Used by Dockerfile / HF Space / inference.py / demo.py
+# For RL training extras, see requirements-rl.txt
 
 # Core
 pydantic>=2.0
@@ -15,14 +17,6 @@ uvicorn>=0.20
 
 # Data + GitHub (for data pipeline)
 PyGithub>=2.0
-
-# RL Training (install with: pip install -r requirements.txt)
-torch>=2.1
-transformers>=4.36
-trl>=1.0
-peft>=0.7
-datasets>=2.14
-accelerate>=0.25
 
 # Testing
 pytest>=8.0
