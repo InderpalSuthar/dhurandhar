@@ -32,7 +32,9 @@ cd dhurandhar
 pip install -r requirements.txt
 ```
 
-Create a `.env` file:
+### Security & Environment Variables
+
+For local development, create a `.env` file. For **Hugging Face Spaces**, use **Secrets** in the settings menu to store your `HF_TOKEN`.
 
 ```env
 HF_TOKEN=hf_your_token_here
@@ -51,18 +53,29 @@ python inference.py --repos "pytorch/pytorch,pallets/flask"
 
 # Custom episode count + specific repos
 python inference.py --episodes 10 --repos "pytorch/pytorch,pallets/flask"
+
+# Advanced visibility (Expert Mode)
+python inference.py --verbose --show-gt --show-details
 ```
+
+**Advanced Inference Flags:**
+
+| Flag             | Description                                                   |
+| ---------------- | ------------------------------------------------------------- |
+| `--verbose`      | Shows the full **Mind of the AI** reasoning for every bug.    |
+| `--show-gt`      | Displays the **Ground Truth** (correct answer) for comparison. |
+| `--show-details` | Shows the detailed **Reward Breakdown** (bonuses/penalties).  |
 
 **Why the defaults are safe for the 20-minute limit:**
 
-| Factor | Value |
-|--------|-------|
-| Episodes per task | 15 |
-| Tasks | 3 |
-| Total LLM calls | 45 |
-| Avg time per call (4 parallel workers) | 5–10s |
-| Estimated runtime | ~3–4 minutes |
-| Buffer before 20-min kill switch | 15+ minutes |
+| Factor                                 | Value        |
+| -------------------------------------- | ------------ |
+| Episodes per task                      | 15           |
+| Tasks                                  | 3            |
+| Total LLM calls                        | 45           |
+| Avg time per call (4 parallel workers) | 5–10s        |
+| Estimated runtime                      | ~3–4 minutes |
+| Buffer before 20-min kill switch       | 15+ minutes  |
 
 Use `--repos` to filter to specific repositories and `--episodes` to reduce the number of bugs evaluated per task.
 
@@ -117,21 +130,24 @@ This manual process takes experienced engineers hours per day. Bug Triage Env pr
 
 ## Tasks
 
-| # | Task | Difficulty | Description |
-|---|------|-----------|-------------|
-| 1 | Criticality Detection | Easy | Binary: `critical` or `non_critical` |
-| 2 | Severity Scoring | Medium | 5-point scale: 1 (trivial) to 5 (crash/outage) |
-| 3 | Root Cause + Assignee | Hard | Category + pick best assignee from contributor list |
+| #   | Task                  | Difficulty | Description                                         |
+| --- | --------------------- | ---------- | --------------------------------------------------- |
+| 1   | Criticality Detection | Easy       | Binary: `critical` or `non_critical`                |
+| 2   | Severity Scoring      | Medium     | 5-point scale: 1 (trivial) to 5 (crash/outage)      |
+| 3   | Root Cause + Assignee | Hard       | Category + pick best assignee from contributor list |
 
 ### Grading
 
 **Task 1 — Criticality**
+
 - 1.0 correct, 0.0 wrong
 
 **Task 2 — Severity**
+
 - 1.0 exact, 0.7 off-by-1, 0.4 off-by-2, 0.0 off-by-3+
 
 **Task 3 — Root Cause + Assignee**
+
 - `(0.6 × root_cause_score) + (0.4 × assignee_score)`
 - Root cause: 1.0 exact, 0.5 related category, 0.0 wrong
 - Assignee: 1.0 exact, 0.6 same team, 0.0 wrong
@@ -146,14 +162,14 @@ Rewards go beyond accuracy. Agents are rewarded for calibrated confidence and qu
 total = base_score + confidence_bonus + reasoning_bonus + edge_case_bonus
 ```
 
-| Component | Condition | Bonus |
-|-----------|-----------|-------|
-| Confidence calibration | Within 0.15 of actual accuracy | +0.08 |
-| Confidence calibration | Within 0.30 | +0.02 |
-| Confidence calibration | Off by > 0.30 | -0.05 |
-| Reasoning quality | Detailed reasoning on correct answer | +0.05 |
-| Reasoning quality | Long reasoning on incorrect answer | +0.02 |
-| Edge case handling | Correct on ambiguous bug | +0.10 |
+| Component              | Condition                            | Bonus |
+| ---------------------- | ------------------------------------ | ----- |
+| Confidence calibration | Within 0.15 of actual accuracy       | +0.08 |
+| Confidence calibration | Within 0.30                          | +0.02 |
+| Confidence calibration | Off by > 0.30                        | -0.05 |
+| Reasoning quality      | Detailed reasoning on correct answer | +0.05 |
+| Reasoning quality      | Long reasoning on incorrect answer   | +0.02 |
+| Edge case handling     | Correct on ambiguous bug             | +0.10 |
 
 Total reward clamped to [0.0, 1.0].
 
@@ -163,36 +179,36 @@ Total reward clamped to [0.0, 1.0].
 
 530 real bug reports fetched from the GitHub API across 15 repositories:
 
-| Repository | Bugs | Domain |
-|------------|------|--------|
-| `tiangolo/fastapi` | 45 | Web Framework |
-| `numpy/numpy` | 40 | Scientific Computing |
-| `pandas-dev/pandas` | 40 | Data Analysis |
-| `huggingface/transformers` | 40 | Machine Learning |
-| `pytorch/pytorch` | 35 | Deep Learning |
-| `pallets/flask` | 35 | Web Framework |
-| `scikit-learn/scikit-learn` | 35 | Machine Learning |
-| `matplotlib/matplotlib` | 35 | Visualization |
-| `home-assistant/core` | 35 | IoT / Home Automation |
-| `google/jax` | 35 | Scientific Computing |
-| `ansible/ansible` | 35 | DevOps |
-| `python/cpython` | 30 | Language Runtime |
-| `pydantic/pydantic` | 30 | Data Validation |
-| `scipy/scipy` | 30 | Scientific Computing |
-| `aws/aws-cli` | 30 | Cloud CLI |
+| Repository                  | Bugs | Domain                |
+| --------------------------- | ---- | --------------------- |
+| `tiangolo/fastapi`          | 45   | Web Framework         |
+| `numpy/numpy`               | 40   | Scientific Computing  |
+| `pandas-dev/pandas`         | 40   | Data Analysis         |
+| `huggingface/transformers`  | 40   | Machine Learning      |
+| `pytorch/pytorch`           | 35   | Deep Learning         |
+| `pallets/flask`             | 35   | Web Framework         |
+| `scikit-learn/scikit-learn` | 35   | Machine Learning      |
+| `matplotlib/matplotlib`     | 35   | Visualization         |
+| `home-assistant/core`       | 35   | IoT / Home Automation |
+| `google/jax`                | 35   | Scientific Computing  |
+| `ansible/ansible`           | 35   | DevOps                |
+| `python/cpython`            | 30   | Language Runtime      |
+| `pydantic/pydantic`         | 30   | Data Validation       |
+| `scipy/scipy`               | 30   | Scientific Computing  |
+| `aws/aws-cli`               | 30   | Cloud CLI             |
 
 225 real contributors with team and expertise mappings used for partial-credit assignee scoring.
 
 **Root Cause Distribution:**
 
-| Category | Count | % |
-|----------|-------|---|
-| Environment | 301 | 57% |
-| Bug | 154 | 29% |
-| Documentation | 41 | 8% |
-| Performance | 19 | 4% |
-| Design | 13 | 2% |
-| External | 2 | <1% |
+| Category      | Count | %   |
+| ------------- | ----- | --- |
+| Environment   | 301   | 57% |
+| Bug           | 154   | 29% |
+| Documentation | 41    | 8%  |
+| Performance   | 19    | 4%  |
+| Design        | 13    | 2%  |
+| External      | 2     | <1% |
 
 ---
 
@@ -223,35 +239,35 @@ print(f"Reward: {reward}")  # 0.0 to 1.0
 
 ### Observation Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `task_id` | `str` | Active task |
-| `bug_report` | `BugReport` | Title, body, labels, repo, comments |
-| `available_assignees` | `List[str]` | Candidate assignees (Task 3 only) |
-| `done` | `bool` | Episode complete flag |
+| Field                 | Type        | Description                         |
+| --------------------- | ----------- | ----------------------------------- |
+| `task_id`             | `str`       | Active task                         |
+| `bug_report`          | `BugReport` | Title, body, labels, repo, comments |
+| `available_assignees` | `List[str]` | Candidate assignees (Task 3 only)   |
+| `done`                | `bool`      | Episode complete flag               |
 
 ### Action Fields
 
-| Field | Type | Tasks |
-|-------|------|-------|
-| `criticality` | `"critical"` or `"non_critical"` | Task 1 |
-| `severity` | `1–5` | Task 2 |
-| `root_cause` | `"bug"`, `"environment"`, `"design"`, `"performance"`, `"documentation"`, `"external"` | Task 3 |
-| `assignee` | `str` | Task 3 |
-| `confidence` | `0.0–1.0` | All |
-| `reasoning` | `str` | All |
+| Field         | Type                                                                                   | Tasks  |
+| ------------- | -------------------------------------------------------------------------------------- | ------ |
+| `criticality` | `"critical"` or `"non_critical"`                                                       | Task 1 |
+| `severity`    | `1–5`                                                                                  | Task 2 |
+| `root_cause`  | `"bug"`, `"environment"`, `"design"`, `"performance"`, `"documentation"`, `"external"` | Task 3 |
+| `assignee`    | `str`                                                                                  | Task 3 |
+| `confidence`  | `0.0–1.0`                                                                              | All    |
+| `reasoning`   | `str`                                                                                  | All    |
 
 ---
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `HF_TOKEN` | HuggingFace token for inference | — |
-| `API_BASE_URL` | LLM API endpoint | `https://router.huggingface.co/v1` |
-| `MODEL_NAME` | Model identifier | `Qwen/Qwen2.5-72B-Instruct` |
-| `NUM_WORKERS` | Parallel LLM threads | `4` |
-| `GITHUB_TOKEN` | GitHub token (data pipeline only) | — |
+| Variable       | Description                       | Default                            |
+| -------------- | --------------------------------- | ---------------------------------- |
+| `HF_TOKEN`     | HuggingFace token for inference   | —                                  |
+| `API_BASE_URL` | LLM API endpoint                  | `https://router.huggingface.co/v1` |
+| `MODEL_NAME`   | Model identifier                  | `Qwen/Qwen2.5-72B-Instruct`        |
+| `NUM_WORKERS`  | Parallel LLM threads              | `4`                                |
+| `GITHUB_TOKEN` | GitHub token (data pipeline only) | —                                  |
 
 ---
 
@@ -301,6 +317,7 @@ python train_rl.py --model HuggingFaceTB/SmolLM2-135M-Instruct
 ```
 
 The training loop:
+
 1. Environment presents a bug report
 2. Model generates multiple completions (GRPO group sampling)
 3. Environment grades each completion → reward (0.0–1.0)
@@ -350,6 +367,7 @@ python -m src.github_fetcher
 `src/keywords.py` also controls how ground-truth labels are generated. You can tune the keyword lists to match your domain:
 
 **`CRITICAL_KEYWORDS`** — words that mark a bug as critical:
+
 ```python
 CRITICAL_KEYWORDS: FrozenSet[str] = frozenset([
     "crash", "segfault", "data loss", "security", "deadlock",
@@ -359,6 +377,7 @@ CRITICAL_KEYWORDS: FrozenSet[str] = frozenset([
 ```
 
 **`SEVERITY_LABEL_MAP`** — maps severity levels (1–5) to keywords:
+
 ```python
 SEVERITY_LABEL_MAP: Dict[int, FrozenSet[str]] = {
     5: frozenset(["p0", "blocker", "critical", "crash"]),
@@ -370,6 +389,7 @@ SEVERITY_LABEL_MAP: Dict[int, FrozenSet[str]] = {
 ```
 
 **`ROOT_CAUSE_KEYWORDS`** — maps root cause categories to keywords:
+
 ```python
 ROOT_CAUSE_KEYWORDS: Dict[str, List[str]] = {
     "bug":           ["crash", "error", "wrong", "incorrect"],
@@ -382,6 +402,7 @@ ROOT_CAUSE_KEYWORDS: Dict[str, List[str]] = {
 ```
 
 **`TEAM_MAP`** — maps repos to team area tags (used to build contributor expertise profiles):
+
 ```python
 TEAM_MAP: Dict[str, List[str]] = {
     "pytorch/pytorch": ["autograd", "distributed", "jit", "cuda"],
