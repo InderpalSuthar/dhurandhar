@@ -1,4 +1,4 @@
-%%{init: {'theme': 'dark', 'themeVariables': {'fontSize': '14px'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '14px', 'primaryColor': '#ECECFF', 'primaryTextColor': '#333', 'primaryBorderColor': '#9370DB', 'lineColor': '#333333', 'secondaryColor': '#E3F2FD', 'tertiaryColor': '#E0E0E0', 'background': '#ffffff', 'mainBkg': '#ECECFF', 'nodeBorder': '#9370DB', 'clusterBkg': 'rgba(232,232,232,0.5)', 'clusterBorder': '#9370DB', 'titleColor': '#333', 'edgeLabelBackground': '#ffffff'}}}%%
 flowchart TB
 
     %% ============================================================
@@ -10,36 +10,44 @@ flowchart TB
     end
 
     %% ============================================================
-    %% DEVELOPER OWNERSHIP
+    %% SOURCE FILES
     %% ============================================================
-    subgraph SUMIT_FILES ["SUMIT's Files"]
+    subgraph DATA_FILES ["Data & Fetching"]
         direction TB
         GF["src/github_fetcher.py\n- GitHubFetcher class\n- fetch_issues()\n- fetch_comments_parallel()\n- process_raw_to_structured()\n- label_ground_truth()\n- run_full_pipeline()"]
-        ENV["src/env.py\n- BugTriageEnv class\n- reset() -> BugTriageObservation\n- step(action) -> (obs, reward, done, info)\n- state() -> dict\n- _grade() dispatcher"]
-        TASKS["src/tasks.py\n- TASK_DEFINITIONS dict\n- get_all_task_ids()\n- validate_task_id()\n- get_required_fields()"]
         UTILS["src/utils.py\n- load_json() / save_json()\n- validate_bug_entry()\n- validate_dataset()\n- get_data_distribution()"]
     end
 
-    subgraph INDERPAL_FILES ["INDERPAL's Files"]
+    subgraph ENV_FILES ["Environment & Tasks"]
+        direction TB
+        ENV["src/env.py\n- BugTriageEnv class\n- reset() -> BugTriageObservation\n- step(action) -> (obs, reward, done, info)\n- state() -> dict\n- _grade() dispatcher"]
+        TASKS["src/tasks.py\n- TASK_DEFINITIONS dict\n- get_all_task_ids()\n- validate_task_id()\n- get_required_fields()"]
+    end
+
+    subgraph GRADING_FILES ["Grading & Rewards"]
         direction TB
         GRADERS["src/graders.py\n- grade_criticality()\n- grade_severity()\n- grade_root_cause_assignee()\n- RELATED_CATEGORIES\n- _same_team()"]
         REWARD["src/reward.py\n- RewardCalculator class\n- compute(base_score, action, gt)\n- confidence_bonus\n- reasoning_bonus\n- edge_case_bonus"]
+    end
+
+    subgraph INFERENCE_FILES ["Inference & Deployment"]
+        direction TB
         INF["inference.py\n- call_llm(system, user)\n- run_task(env, task_id, episodes)\n- main()\n- 3 system prompts\n- DEFAULTS fallback"]
         DOCKER["Dockerfile\n- python:3.11-slim\n- pip install requirements\n- CMD python inference.py\n- EXPOSE 7860"]
         OPENENV["openenv.yaml\n- entry_point: src.env\n- class: BugTriageEnv\n- 3 task definitions\n- deployment: HF Spaces"]
         README["README.md\n- Setup instructions\n- Task descriptions\n- Baseline scores\n- Architecture diagram"]
     end
 
-    subgraph JOINT_FILES ["JOINT (Both)"]
+    subgraph SHARED_FILES ["Shared"]
         direction TB
         MODELS["src/models.py\n- CriticalityLabel enum\n- SeverityLevel enum\n- RootCauseCategory enum\n- BugReport\n- BugTriageObservation\n- BugTriageAction\n- BugTriageReward\n- BugGroundTruth"]
         REQS["requirements.txt\n- pydantic, openai, requests\n- python-dotenv, PyGithub\n- pytest, pytest-cov"]
     end
 
     %% ============================================================
-    %% DATA PIPELINE (SUMIT)
+    %% DATA PIPELINE
     %% ============================================================
-    subgraph DATA_PIPELINE ["DATA PIPELINE (Sumit)"]
+    subgraph DATA_PIPELINE ["DATA PIPELINE"]
         direction TB
         GH_API["GitHub REST API\n5 repos:\n- pytorch/pytorch\n- pallets/flask\n- tiangolo/fastapi\n- numpy/numpy\n- python/cpython"]
         FETCH["GitHubFetcher.run_full_pipeline()\n1. fetch_issues() x5 repos (parallel)\n2. fetch_comments_parallel()\n3. process_raw_to_structured()\n4. label_ground_truth() (keyword heuristics)"]
@@ -67,9 +75,9 @@ flowchart TB
     FETCH --> GT_LABELING
 
     %% ============================================================
-    %% ENVIRONMENT CORE (SUMIT)
+    %% ENVIRONMENT CORE
     %% ============================================================
-    subgraph ENV_CORE ["RL ENVIRONMENT (Sumit's env.py)"]
+    subgraph ENV_CORE ["RL ENVIRONMENT"]
         direction TB
         ENV_INIT["BugTriageEnv.__init__()\n- Load bugs_processed.json\n- Shuffle with seed=42\n- Init RewardCalculator\n- Set task cycling"]
         ENV_RESET["reset(task_id=None)\n- Cycle to next task\n- Select next bug\n- Parse BugGroundTruth (hidden)\n- Build BugReport\n- Get available_assignees\n- Return BugTriageObservation"]
@@ -83,9 +91,9 @@ flowchart TB
     ENV_STEP --> GRADE_DISPATCH
 
     %% ============================================================
-    %% GRADING ENGINE (INDERPAL)
+    %% GRADING ENGINE
     %% ============================================================
-    subgraph GRADING ["GRADING ENGINE (Inderpal's graders.py + reward.py)"]
+    subgraph GRADING ["GRADING ENGINE"]
         direction TB
         G1["grade_criticality(action, gt)\nExact match: 1.0\nWrong: 0.0"]
         G2["grade_severity(action, gt)\nExact: 1.0 | Off-by-1: 0.7\nOff-by-2: 0.4 | Off-by-3+: 0.0"]
@@ -102,9 +110,9 @@ flowchart TB
     REWARD_CALC -->|"BugTriageReward\n(total float)"| ENV_STEP
 
     %% ============================================================
-    %% INFERENCE PIPELINE (INDERPAL)
+    %% INFERENCE PIPELINE
     %% ============================================================
-    subgraph INFERENCE ["INFERENCE PIPELINE (Inderpal's inference.py)"]
+    subgraph INFERENCE ["INFERENCE PIPELINE"]
         direction TB
         MAIN["main()\nfor task in [criticality, severity, root_cause_assignee]:\n  print [START]\n  run_task(env, task_id, 60 episodes)\n  print [END] with avg score"]
         RUN_TASK["run_task(env, task_id, num_episodes)\nfor ep in range(num_episodes):\n  1. obs = env.reset(task_id)\n  2. Build user_prompt from bug\n  3. call_llm() with task prompt\n  4. Parse response -> BugTriageAction\n  5. obs, reward, done, info = env.step(action)\n  6. Print [STEP]"]
@@ -187,18 +195,21 @@ flowchart TB
     end
 
     %% ============================================================
-    %% STYLING
+    %% STYLING - matching rl_env_flow.svg palette
     %% ============================================================
-    classDef sumit fill:#1a5276,stroke:#2980b9,color:#fff
-    classDef inderpal fill:#7d3c98,stroke:#a569bd,color:#fff
-    classDef joint fill:#1e8449,stroke:#27ae60,color:#fff
-    classDef data fill:#b7950b,stroke:#f1c40f,color:#fff
-    classDef external fill:#922b21,stroke:#e74c3c,color:#fff
-    classDef output fill:#2c3e50,stroke:#95a5a6,color:#fff
+    classDef pipeline fill:#E3F2FD,stroke:#2196F3,color:#333
+    classDef env fill:#ECECFF,stroke:#9370DB,color:#333
+    classDef grading fill:#90EE90,stroke:#4CAF50,color:#333
+    classDef inference fill:#FFD700,stroke:#FF9800,color:#333
+    classDef data fill:#ffffde,stroke:#aaaa33,color:#333
+    classDef external fill:#E0E0E0,stroke:#000,color:#333
+    classDef output fill:#E3F2FD,stroke:#2196F3,color:#333
 
-    class GF,ENV,TASKS,UTILS,ENV_INIT,ENV_RESET,ENV_STEP,GRADE_DISPATCH sumit
-    class GRADERS,REWARD,INF,DOCKER,OPENENV,README,G1,G2,G3,REWARD_CALC,MAIN,RUN_TASK,CALL_LLM,DEFAULTS_FB inderpal
-    class MODELS,REQS joint
-    class RAW,PROCESSED,CONTRIBS,GH_API data
+    class GF,UTILS,FETCH,GH_API,RAW,PROCESSED,CONTRIBS pipeline
+    class ENV,TASKS,ENV_INIT,ENV_RESET,ENV_STEP,GRADE_DISPATCH env
+    class GRADERS,REWARD,G1,G2,G3,REWARD_CALC grading
+    class INF,DOCKER,OPENENV,README,MAIN,RUN_TASK,CALL_LLM,DEFAULTS_FB inference
+    class MODELS,REQS data
     class GROQ,PROMPTS external
-    class START,STEP,END_OUT,OVERALL,DOCKER_BUILD,DOCKER_RUN,HF_SPACE output
+    class START,STEP,END_OUT,OVERALL,DOCKER_BUILD,DOCKER_RUN,HF_SPACE,GT_CRIT,GT_SEV,GT_RC,GT_ASN output
+    class T_ENV,T_GRADERS env
